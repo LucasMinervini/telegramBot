@@ -7,8 +7,7 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import com.bot.telegramdocreader.dto.TransferDTO;
 
 import java.io.File;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+
 
 @Service
 public class TelegramFileService {
@@ -21,12 +20,15 @@ public class TelegramFileService {
             return null; // No hay transferencia disponible
         }
         try {
-            // Generar nombre de archivo con timestamp
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String fileName = "Transferencia_" + timestamp + ".xlsx";
+            // Generar el archivo Excel
+            String result = ExportExcel.exportTransferToExcel(transferencia);
             
-            // Exportar a Excel y obtener el archivo
+            if (result.startsWith("Error")) {
+                return null;
+            }
             
+            // Obtener el nombre del archivo generado
+            String fileName = result.substring(result.lastIndexOf(":") + 2);
             File excelFile = new File(fileName);
             
             if (excelFile.exists()) {
