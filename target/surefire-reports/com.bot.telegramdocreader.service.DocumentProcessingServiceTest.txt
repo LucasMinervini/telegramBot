@@ -1,0 +1,66 @@
+-------------------------------------------------------------------------------
+Test set: com.bot.telegramdocreader.service.DocumentProcessingServiceTest
+-------------------------------------------------------------------------------
+Tests run: 5, Failures: 3, Errors: 2, Skipped: 0, Time elapsed: 2.438 s <<< FAILURE! -- in com.bot.telegramdocreader.service.DocumentProcessingServiceTest
+com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_documentWithEmptyFileName_returnsErrorMessage -- Time elapsed: 1.211 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:31)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:183)
+	at com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_documentWithEmptyFileName_returnsErrorMessage(DocumentProcessingServiceTest.java:84)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_returnsExpectedText -- Time elapsed: 1.161 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: El resultado no contiene el texto esperado ==> expected: <true> but was: <false>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_returnsExpectedText(DocumentProcessingServiceTest.java:43)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_nullDocument_returnsErrorMessage -- Time elapsed: 0.006 s <<< FAILURE!
+org.opentest4j.AssertionFailedError: Unexpected exception type thrown, expected: <java.lang.IllegalArgumentException> but was: <java.lang.NullPointerException>
+	at org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:67)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:35)
+	at org.junit.jupiter.api.Assertions.assertThrows(Assertions.java:3115)
+	at com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_nullDocument_returnsErrorMessage(DocumentProcessingServiceTest.java:50)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+Caused by: java.lang.NullPointerException: Cannot invoke "org.telegram.telegrambots.meta.api.objects.Document.getFileName()" because "doc" is null
+	at com.bot.telegramdocreader.service.DocumentProcessingService.isImage(DocumentProcessingService.java:71)
+	at com.bot.telegramdocreader.service.DocumentProcessingService.processDocument(DocumentProcessingService.java:40)
+	at com.bot.telegramdocreader.service.DocumentProcessingServiceTest.lambda$testProcessDocument_nullDocument_returnsErrorMessage$0(DocumentProcessingServiceTest.java:51)
+	at org.junit.jupiter.api.AssertThrows.assertThrows(AssertThrows.java:53)
+	... 6 more
+
+com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_documentWithNullFileId_returnsErrorMessage -- Time elapsed: 0.003 s <<< ERROR!
+java.lang.NullPointerException: fileId is marked non-null but is null
+	at org.telegram.telegrambots.meta.api.methods.GetFile.setFileId(GetFile.java:28)
+	at com.bot.telegramdocreader.service.DocumentProcessingService.getFileFromTelegram(DocumentProcessingService.java:146)
+	at com.bot.telegramdocreader.service.DocumentProcessingService.extractTextFromPdf(DocumentProcessingService.java:83)
+	at com.bot.telegramdocreader.service.DocumentProcessingService.processDocument(DocumentProcessingService.java:54)
+	at com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_documentWithNullFileId_returnsErrorMessage(DocumentProcessingServiceTest.java:95)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
+com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_documentWithNullFileName_returnsErrorMessage -- Time elapsed: 0.003 s <<< ERROR!
+java.lang.NullPointerException: Cannot invoke "String.toLowerCase()" because the return value of "org.telegram.telegrambots.meta.api.objects.Document.getFileName()" is null
+	at com.bot.telegramdocreader.service.DocumentProcessingService.isImage(DocumentProcessingService.java:71)
+	at com.bot.telegramdocreader.service.DocumentProcessingService.processDocument(DocumentProcessingService.java:40)
+	at com.bot.telegramdocreader.service.DocumentProcessingServiceTest.testProcessDocument_documentWithNullFileName_returnsErrorMessage(DocumentProcessingServiceTest.java:68)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:568)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1511)
+
