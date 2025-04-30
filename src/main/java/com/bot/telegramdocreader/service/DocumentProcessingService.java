@@ -8,9 +8,8 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.pdfbox.pdmodel.encryption.AccessPermission;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
-import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy;
+
 
 import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
@@ -38,42 +37,68 @@ public class DocumentProcessingService {
     // Este método se encarga de procesar el documento recibido por el bot
     public String processDocument(Document doc, String botToken) throws Exception {
         String textoExtraido;
-    
-        if (isImage(doc)) {
-            File file = getFileFromTelegram(doc.getFileId(), botToken);
-            URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
-            InputStream inputStream = fileUrl.openStream();
-            BufferedImage image = ImageIO.read(inputStream);
-    
-            ITesseract instance = new Tesseract();
-            instance.setDatapath("C:\\Program Files\\Tesseract-OCR\\tessdata");
-            instance.setLanguage("spa");
-            instance.setPageSegMode(1);
-            instance.setOcrEngineMode(1);
-    
-            textoExtraido = instance.doOCR(image);
-        } else if (isPdf(doc)) {
-            textoExtraido = extractTextFromPdf(doc, botToken);
-        } else {
-            return "Formato de archivo no soportado.";
-        }
-    
-        // Mapper Transferencia 
-        TransferDTO transferencia = mapearTransferencia(textoExtraido);
-        if (transferencia != null) {
-            this.lastTransfer = transferencia; // Guardar la transferencia
-            return transferencia.receiverDetails();
-        } else {
-            this.lastTransfer = null;
-            return "Texto extraído:\n\n" + textoExtraido;
+        
+        try {
+            if (isImage(doc)) {
+                File file = getFileFromTelegram(doc.getFileId(), botToken);
+                URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
+                InputStream inputStream = fileUrl.openStream();
+                BufferedImage image = ImageIO.read(inputStream);
+        
+                ITesseract instance = new Tesseract();
+                instance.setDatapath("C:\\Program Files\\Tesseract-OCR\\tessdata");
+                instance.setLanguage("spa");
+                instance.setPageSegMode(1);
+                instance.setOcrEngineMode(1);
+        
+                textoExtraido = instance.doOCR(image);
+            } else if (isPdf(doc)) {
+                textoExtraido = extractTextFromPdf(doc, botToken);
+                if (textoExtraido.startsWith("Error") || textoExtraido.contains("protegido con contraseña")) {
+                    return textoExtraido;
+                }
+            } else {
+                return "Formato de archivo no soportado.";
+            }
+            
+            // Mapper Transferencia 
+            TransferDTO transferencia = mapearTransferencia(textoExtraido);
+            if (transferencia != null) {
+                this.lastTransfer = transferencia; // Guardar la transferencia
+                // Retornar solo los detalles sin duplicar el texto
+                String details = "Nombre: " + transferencia.getName() + "\n" +
+                                "CUIT: " + transferencia.getCuit() + "\n" +
+                                "Número de cuenta: " + transferencia.getAccountNumber() + "\n" +
+                                "Banco: " + transferencia.getBank();
+                return details;
+            } else {
+                this.lastTransfer = transferencia;
+                return textoExtraido;
+            }
+        } catch (Exception e) {
+            System.out.println("Error en el procesamiento del documento: " + e.getMessage());
+            e.printStackTrace();
+            return "Error en el procesamiento del documento: " + e.getMessage();
         }
     }
     
+
     
-    // Método para verificar si el archivo es una imagen
+    // Método para verificar si el archivo es una imagen o captura de pantalla
     private boolean isImage(Document doc) {
         String fileName = doc.getFileName().toLowerCase();
-        return fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png");
+        String mimeType = doc.getMimeType().toLowerCase();
+        
+        // Verificar por extensión de archivo
+        boolean isImageByExtension = fileName.endsWith(".jpg") || 
+                                   fileName.endsWith(".jpeg") || 
+                                   fileName.endsWith(".png") || 
+                                   fileName.endsWith(".heic"); 
+        
+        // Verificar por tipo MIME
+        boolean isImageByMimeType = mimeType.startsWith("image/");
+        
+        return isImageByExtension || isImageByMimeType;
     }
     
     // Método para verificar si el archivo es un PDF
@@ -82,66 +107,56 @@ public class DocumentProcessingService {
     }
 
     // Método para extraer texto de un archivo PDF 
-    private String extractTextFromPdf(Document doc, String botToken) throws Exception {
+    private String extractTextFromPdf(Document doc, String botToken) {
         // Obtener el archivo desde Telegram
-        File file = getFileFromTelegram(doc.getFileId(), botToken);
-        URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
-        System.out.println("Intentando descargar PDF desde: " + fileUrl);
-
-        try (InputStream inputStream = fileUrl.openStream()) {
-            PDDocument document;
-            try {
-                // Intentar cargar el documento con una contraseña vacía primero
-                document = PDDocument.load(inputStream, "");
-            } catch (InvalidPasswordException e) {
-                return "El PDF está protegido con contraseña. Por favor, proporcione la contraseña correcta.";
+        File file = null;
+        InputStream inputStream = null;
+        PDDocument document = null;
+        try {
+            file = getFileFromTelegram(doc.getFileId(), botToken);
+            URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
+            System.out.println("Intentando descargar PDF desde: " + fileUrl);
+            inputStream = fileUrl.openStream();
+            
+            // Intentar cargar el documento con una contraseña vacía
+            document = PDDocument.load(inputStream, "");
+    
+            // Configuración para permitir la extracción de texto
+            if (document.isEncrypted()) {
+                document.setAllSecurityToBeRemoved(true);
             }
-
-            try {
-                System.out.println("PDF cargado correctamente");
-
-                // Configurar permisos de acceso
-                AccessPermission ap = new AccessPermission();
-                // Permitir la extracción de contenido para poder leer el texto
-                ap.setCanExtractContent(true);
-
-                if (document.isEncrypted()) {
-                    try {
-                        // Configurar la política de protección estándar
-                        StandardProtectionPolicy spp = new StandardProtectionPolicy("", "", ap);
-                        spp.setEncryptionKeyLength(128);
-                        document.protect(spp);
-                        document.setAllSecurityToBeRemoved(true);
-                    } catch (Exception e) {
-                        document.close();
-                        return "No se pudo desencriptar el PDF. El documento podría estar protegido con una contraseña diferente.";
-                    }
-                }
-
-                PDFTextStripper stripper = new PDFTextStripper();
-                String text = stripper.getText(document).trim();
-
-                if (text.isEmpty()) {
-                    document.close();
-                    return "No se pudo extraer texto del PDF. El documento podría estar vacío o tener un formato no compatible.";
-                }
-
-                System.out.println("Texto extraído exitosamente. Longitud: " + text.length());
-                document.close();
-                return text;
-
-            } catch (Exception e) {
-                document.close();
-                System.out.println("Error al procesar el PDF: " + e.getMessage());
-                e.printStackTrace();
-                return "Error al procesar el PDF: " + e.getMessage();
+    
+            PDFTextStripper stripper = new PDFTextStripper();
+            String text = stripper.getText(document).trim();
+            
+            if (text.isEmpty()) {
+                throw new IOException("No se pudo extraer texto del PDF. El documento podría estar vacío o tener un formato no compatible.");
             }
+            
+            System.out.println("Texto extraído exitosamente. Longitud: " + text.length());
+            return text;
+    
+        } catch (InvalidPasswordException e) {
+            return "El PDF está protegido con contraseña. Por favor, proporcione la contraseña correcta.";
         } catch (IOException e) {
-            System.out.println("Error al abrir el archivo PDF: " + e.getMessage());
-            e.printStackTrace();
-            return "Error al abrir el archivo PDF: " + e.getMessage();
+            return "Error al procesar el PDF: " + e.getMessage();
+        } catch (Exception e) {
+            return "Error inesperado al procesar el PDF: " + e.getMessage();
+        } finally {
+            // Cerrar el documento y el InputStream al finalizar
+            try {
+                if (document != null) {
+                    document.close();
+                }
+                if (inputStream != null) {
+                    inputStream.close();
+                }
+            } catch (IOException e) {
+                System.out.println("Error al cerrar los recursos: " + e.getMessage());
+            }
         }
     }
+    
     
 
     

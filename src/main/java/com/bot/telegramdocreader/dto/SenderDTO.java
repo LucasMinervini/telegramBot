@@ -1,5 +1,7 @@
 package com.bot.telegramdocreader.dto;
 
+import java.io.IOException;
+
 import com.bot.telegramdocreader.service.ExportExcel;
 import lombok.Builder;
 import lombok.Data;
@@ -12,7 +14,7 @@ public class SenderDTO {
     private String accountNumber;
     private String bank;
 
-    public String senderDetails() {
+    public String senderDetails() throws IOException {
         String details = "Nombre: " + name + "\n" +
                 "CUIT: " + cuit + "\n" +
                 "Número de cuenta: " + accountNumber + "\n" +

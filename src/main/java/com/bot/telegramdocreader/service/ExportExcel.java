@@ -13,7 +13,12 @@ import java.time.format.DateTimeFormatter;
 
 public class ExportExcel {
 
-    public static String exportTransferToExcel(TransferDTO transferencia) {
+    public static String exportTransferToExcel(TransferDTO transferencia) throws IOException {
+        if (transferencia == null) {
+            throw new IllegalArgumentException("La transferencia no puede ser nula");
+        }
+
+        String fileName = null;
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Emisor");
 
@@ -32,7 +37,6 @@ public class ExportExcel {
             dataRow.createCell(2).setCellValue(transferencia.getAccountNumber());
             dataRow.createCell(3).setCellValue(transferencia.getBank());
             
-
             // Ajustar ancho de columnas
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
@@ -40,22 +44,35 @@ public class ExportExcel {
 
             // Generar nombre de archivo con timestamp
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            fileName = System.getProperty("user.dir") + "/excelFolder/Transferencia_" + timestamp + ".xlsx";
             
-            String fileName = "Transferencia_" + timestamp + ".xlsx";
+            // Crear directorio si no existe
+            java.io.File directory = new java.io.File(System.getProperty("user.dir") + "/excelFolder");
+            if (!directory.exists()) {
+                if (!directory.mkdirs()) {
+                    throw new IOException("No se pudo crear el directorio para los archivos Excel");
+                }
+            }
             
             // Guardar archivo
             try (FileOutputStream fileOut = new FileOutputStream(fileName)) {
                 workbook.write(fileOut);
+                System.out.println("Archivo Excel guardado en: " + fileName);
             }
 
-            return "Archivo Excel creado exitosamente: " + fileName;
+            return "Archivo Excel creado exitosamente." ;
         } catch (IOException e) {
-            return "Error al crear archivo Excel: " + e.getMessage();
+            throw new IOException("Error al crear archivo Excel: " + e.getMessage(), e);
         }
     }
 
     
-    public static String exportSenderToExcel(SenderDTO sender) {
+    public static String exportSenderToExcel(SenderDTO sender) throws IOException {
+        if (sender == null) {
+            throw new IllegalArgumentException("El remitente no puede ser nulo");
+        }
+
+        String fileName = null;
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Remitente");
 
@@ -79,18 +96,27 @@ public class ExportExcel {
                 sheet.autoSizeColumn(i);
             }
 
-            // Generar nombre de archivo con timestamp
             String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            String fileName = "Remitente_" + timestamp + ".xlsx";
+            fileName = System.getProperty("user.dir") + "/excelFolder/Transferencia_" + timestamp + ".xlsx";
+            
+            // Crear directorio si no existe
+            java.io.File directory = new java.io.File(System.getProperty("user.dir") + "/excelFolder");
+            if (!directory.exists()) {
+                if (!directory.mkdirs()) {
+                    throw new IOException("No se pudo crear el directorio para los archivos Excel");
+                }
+            }
             
             // Guardar archivo
             try (FileOutputStream fileOut = new FileOutputStream(fileName)) {
                 workbook.write(fileOut);
+                System.out.println("Archivo Excel guardado en: " + fileName);
             }
+
+            return "Archivo Excel creado exitosamente.";
             
-            return "Archivo Excel creado exitosamente: " + fileName;
         } catch (IOException e) {
-            return "Error al crear archivo Excel: " + e.getMessage();
+            throw new IOException("Error al crear archivo Excel: " + e.getMessage(), e);
         }
     }
 }

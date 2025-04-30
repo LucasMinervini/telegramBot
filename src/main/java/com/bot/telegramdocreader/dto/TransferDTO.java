@@ -1,6 +1,5 @@
 package com.bot.telegramdocreader.dto;
 
-import com.bot.telegramdocreader.service.ExportExcel;
 
 import lombok.Builder;
 import lombok.Data;
@@ -17,13 +16,9 @@ public class TransferDTO {
 
 
     public String receiverDetails() {
-        String details = "Nombre: " + name + "\n" +
+        return "Nombre: " + name + "\n" +
                 "CUIT: " + cuit + "\n" +
                 "Número de cuenta: " + accountNumber + "\n" +
                 "Banco: " + bank;
-
-        // Exportar a Excel
-        String excelResult = ExportExcel.exportTransferToExcel(this);
-        return details + "\n\n" + excelResult;
     }
 }
