@@ -10,7 +10,7 @@ public class TransferDTO {
     
     private String name;
     private String cuit;
-    private String accountNumber;
+    private String amount;
     private String bank;
 
 
@@ -18,7 +18,7 @@ public class TransferDTO {
     public String receiverDetails() {
         return "Nombre: " + name + "\n" +
                 "CUIT: " + cuit + "\n" +
-                "Número de cuenta: " + accountNumber + "\n" +
+                "Monto: " + amount + "\n" +
                 "Banco: " + bank;
     }
 }

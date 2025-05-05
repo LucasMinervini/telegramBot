@@ -17,7 +17,7 @@ public class SenderDTO {
     public String senderDetails() throws IOException {
         String details = "Nombre: " + name + "\n" +
                 "CUIT: " + cuit + "\n" +
-                "Número de cuenta: " + accountNumber + "\n" +
+                "Monto: " + accountNumber + "\n" +
                 "Banco: " + bank;
 
         // Exportar a Excel

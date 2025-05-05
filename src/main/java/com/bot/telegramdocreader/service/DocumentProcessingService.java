@@ -63,16 +63,26 @@ public class DocumentProcessingService {
             
             // Mapper Transferencia 
             TransferDTO transferencia = mapearTransferencia(textoExtraido);
+            this.lastTransfer = transferencia; // Guardar la transferencia
+
             if (transferencia != null) {
-                this.lastTransfer = transferencia; // Guardar la transferencia
-                // Retornar solo los detalles sin duplicar el texto
-                String details = "Nombre: " + transferencia.getName() + "\n" +
-                                "CUIT: " + transferencia.getCuit() + "\n" +
-                                "Número de cuenta: " + transferencia.getAccountNumber() + "\n" +
-                                "Banco: " + transferencia.getBank();
-                return details;
+                try {
+                    String excelResult = ExportExcel.exportTransferToExcel(transferencia);
+                    if (excelResult.startsWith("Error")) {
+                        System.out.println("Error al generar el archivo Excel: " + excelResult);
+                        return "Error al generar el archivo Excel: " + excelResult;
+                    }
+                    // Retornar los detalles de la transferencia
+                    return String.format("Nombre: %s\nCUIT: %s\nMonto: $ %s\nBanco: %s", 
+                        transferencia.getName(),
+                        transferencia.getCuit(),
+                        transferencia.getAmount(),
+                        transferencia.getBank());
+                } catch (IOException e) {
+                    System.out.println("Error al generar el archivo Excel: " + e.getMessage());
+                    return "Error al generar el archivo Excel: " + e.getMessage();
+                }
             } else {
-                this.lastTransfer = transferencia;
                 return textoExtraido;
             }
         } catch (Exception e) {
@@ -133,7 +143,7 @@ public class DocumentProcessingService {
                 throw new IOException("No se pudo extraer texto del PDF. El documento podría estar vacío o tener un formato no compatible.");
             }
             
-            System.out.println("Texto extraído exitosamente. Longitud: " + text.length());
+            
             return text;
     
         } catch (InvalidPasswordException e) {
@@ -179,37 +189,54 @@ public class DocumentProcessingService {
         String cuit = "";
         String monto = "";
         String bancoReceptor = "";
+        boolean isPdfFormat = textoExtraido.contains("PDF") || textoExtraido.contains("pdf");
     
         for (String linea : lineas) {
             String lower = linea.toLowerCase().trim();
             String original = linea.trim();
     
-           if (lower.startsWith("a")) {
-            destinatario= original;
-           }
-            
-            if (lower.startsWith("$")) {
-                monto = original;
-            }
-            if (lower.contains("cur")) {
-                cuit = original.replace("CUR", "").replace("cur", "").trim();
-            }
-            if (lower.contains("banco destino")) {
-                bancoReceptor = original.replace("Banco destino", "").replace("BANCO DESTINO", "").trim();
+            if (isPdfFormat) {
+                // Lógica específica para PDFs
+                if (lower.contains("De")) {
+                    destinatario = original.replaceAll("(?i)De:|de:", "").trim();
+                }
+                if (lower.contains("mercado pago")) {
+                    bancoReceptor = "Mercado Pago";
+                }
+                if (lower.contains("cuil") || lower.contains("cuit") ) {
+                    cuit = original.replaceAll("(?i)cuit:|:", "").trim();
+                }
+                if (lower.startsWith("$")) {
+                    monto = original.replaceAll("\\$", "").trim();
+                }
+            } else {
+                // Lógica original para imágenes
+                if (lower.startsWith("a") || lower.contains("destinatario") || lower.contains("beneficiario")) {
+                    destinatario = original.replaceAll("(?i)a |destinatario:|beneficiario:", "").trim();
+                }
+                if (lower.startsWith("$") || lower.contains("importe") || lower.contains("monto")) {
+                    monto = original.replaceAll("(?i)importe:|monto:|\\$", "").trim();
+                }
+                if (lower.contains("cur") || lower.contains("cuit") || lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*")) {
+                    cuit = original.replaceAll("(?i)CUR|CUIT:|cuit:|:", "").trim();
+                }
+                if (lower.contains("banco") || lower.contains("entidad")) {
+                    bancoReceptor = original.replaceAll("(?i)|banco:|entidad:|destino:", "").trim();
+                }
             }
         }
     
-        if (!cuit.isEmpty() && !monto.isEmpty() && !bancoReceptor.isEmpty()) {
+        // Validar que al menos tengamos algunos datos básicos
+        if (!destinatario.isEmpty() || !cuit.isEmpty()) {
             TransferDTO transferencia = TransferDTO.builder()
                 .name(destinatario)
                 .cuit(cuit)
-                .accountNumber(monto)
+                .amount(monto)
                 .bank(bancoReceptor)
                 .build();
-              return transferencia;
-        } else {
-            return null; 
+            return transferencia;
         }
+        return null;
     }
     
 

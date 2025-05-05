@@ -15,7 +15,7 @@ import com.bot.telegramdocreader.dto.TransferDTO;
 public class TelegramFileService {
 
     private List<TransferDTO> transferencias;
-    private static final String EXCEL_FOLDER = "excels/";
+    private static final String EXCEL_FOLDER = "excelsConcatenados/";
 
     public TelegramFileService() {
         this.transferencias = new ArrayList<>();
@@ -53,7 +53,7 @@ public class TelegramFileService {
             Row headerRow = sheet.createRow(0);
             headerRow.createCell(0).setCellValue("Nombre");
             headerRow.createCell(1).setCellValue("CUIT");
-            headerRow.createCell(2).setCellValue("Número de Cuenta");
+            headerRow.createCell(2).setCellValue("Monto");
             headerRow.createCell(3).setCellValue("Banco");
 
             // Agregar datos de todas las transferencias
@@ -62,7 +62,7 @@ public class TelegramFileService {
                 Row row = sheet.createRow(rowNum++);
                 row.createCell(0).setCellValue(transferencia.getName());
                 row.createCell(1).setCellValue(transferencia.getCuit());
-                row.createCell(2).setCellValue(transferencia.getAccountNumber());
+                row.createCell(2).setCellValue(transferencia.getAmount());
                 row.createCell(3).setCellValue(transferencia.getBank());
             }
 

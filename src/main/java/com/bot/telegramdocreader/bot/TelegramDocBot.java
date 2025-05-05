@@ -95,7 +95,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             // Enviar mensaje con los botones
             SendMessage response = new SendMessage();
             response.setChatId(chatId);
-            response.setText("Texto extraído:\n\n" + result);
+            response.setText(result);
             response.setReplyMarkup(markupInline);
             execute(response);
 

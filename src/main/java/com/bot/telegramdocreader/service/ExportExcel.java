@@ -24,7 +24,7 @@ public class ExportExcel {
 
             // Encabezados
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"Nombre", "CUIT", "Número de cuenta", "Banco"};
+            String[] headers = {"Nombre", "CUIT", "Monto", "Banco"};
             
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
@@ -34,7 +34,7 @@ public class ExportExcel {
             Row dataRow = sheet.createRow(1);
             dataRow.createCell(0).setCellValue(transferencia.getName());
             dataRow.createCell(1).setCellValue(transferencia.getCuit());
-            dataRow.createCell(2).setCellValue(transferencia.getAccountNumber());
+            dataRow.createCell(2).setCellValue(transferencia.getAmount());
             dataRow.createCell(3).setCellValue(transferencia.getBank());
             
             // Ajustar ancho de columnas
@@ -78,7 +78,7 @@ public class ExportExcel {
 
             // Encabezados
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"Nombre", "CUIT", "Número de cuenta", "Banco"};
+            String[] headers = {"Nombre", "CUIT", "Monto", "Banco"};
             
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
