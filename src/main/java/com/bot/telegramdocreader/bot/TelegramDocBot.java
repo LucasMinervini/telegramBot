@@ -80,8 +80,8 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             List<InlineKeyboardButton> rowInline = new ArrayList<>();
 
             InlineKeyboardButton downloadButton = new InlineKeyboardButton();
-            downloadButton.setText("Descargar Excel");
-            downloadButton.setCallbackData("download_excel");
+            downloadButton.setText("Bajar Excel concatenados");
+            downloadButton.setCallbackData("download_concat_excel");
 
             InlineKeyboardButton saveButton = new InlineKeyboardButton();
             saveButton.setText("Guardar Excel");
@@ -120,20 +120,20 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                 return;
             }
 
-            if ("download_excel".equals(callbackData)) {
-                String excelFilePath = telegramFileService.createExcelFile(lastTransfer);
+            if ("download_concat_excel".equals(callbackData)) {
+                String excelFilePath = telegramFileService.createConcatenatedExcelFile();
                 if (!excelFilePath.startsWith("Error")) {
-                    // Crear un objeto File con la ruta del Excel
+                    // Crear un objeto File con la ruta del Excel concatenado
                     File excelFile = new File(excelFilePath);
                     if (excelFile.exists()) {
-                        // Enviar el archivo Excel como documento usando InputFile
+                        // Enviar el archivo Excel concatenado como documento usando InputFile
                         SendDocument sendDocument = new SendDocument();
                         sendDocument.setChatId(chatId);
                         sendDocument.setDocument(new InputFile(excelFile));
-                        sendDocument.setCaption("Archivo Excel generado");
+                        sendDocument.setCaption("Archivo Excel concatenado generado");
                         execute(sendDocument);
                     } else {
-                        execute(new SendMessage(chatId, "Error: No se pudo encontrar el archivo Excel generado."));
+                        execute(new SendMessage(chatId, "Error: No se pudo encontrar el archivo Excel concatenado."));
                     }
                 } 
             } else if ("save_excel".equals(callbackData)) {
