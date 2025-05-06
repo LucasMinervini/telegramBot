@@ -1,6 +1,8 @@
 package com.bot.telegramdocreader.dto;
 
 
+
+
 import lombok.Builder;
 import lombok.Data;
 
@@ -9,16 +11,22 @@ import lombok.Data;
 public class TransferDTO {
     
     private String name;
-    private String cuit;
     private String amount;
+    private String cuit;
+    private String date;
     private String bank;
-
-
-
+    private String typeOFTransfer;
+    private String cuentaOrigen;    
+    private String cbuOrigen;       
+    private String titularOrigen;   
+      
+    
     public String receiverDetails() {
         return "Nombre: " + name + "\n" +
-                "CUIT: " + cuit + "\n" +
-                "Monto: " + amount + "\n" +
-                "Banco: " + bank;
+               "Fecha: " + date + "\n" +
+               "Monto: " + amount + "\n" +
+               "Cuit: " + cuit + "\n" +
+                "Tipo de Operación: " + typeOFTransfer + "\n" +
+               "Banco: " + bank;
     }
 }

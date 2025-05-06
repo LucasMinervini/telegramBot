@@ -49,21 +49,43 @@ public class TelegramFileService {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Transferencias Concatenadas");
 
+            // Crear estilo para encabezados en negrita
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
             // Crear encabezados
             Row headerRow = sheet.createRow(0);
-            headerRow.createCell(0).setCellValue("Nombre");
-            headerRow.createCell(1).setCellValue("CUIT");
-            headerRow.createCell(2).setCellValue("Monto");
-            headerRow.createCell(3).setCellValue("Banco");
+            Cell headerCell0 = headerRow.createCell(0);
+            headerCell0.setCellValue("Fecha");
+            headerCell0.setCellStyle(headerStyle);
+
+            Cell headerCell1 = headerRow.createCell(1);
+            headerCell1.setCellValue("Tipo de Operación");
+            headerCell1.setCellStyle(headerStyle);
+
+            Cell headerCell2 = headerRow.createCell(2);
+            headerCell2.setCellValue("CUIT");
+            headerCell2.setCellStyle(headerStyle);
+
+            Cell headerCell3 = headerRow.createCell(3);
+            headerCell3.setCellValue("Monto Bruto");
+            headerCell3.setCellStyle(headerStyle);
+
+            Cell headerCell4 = headerRow.createCell(4);
+            headerCell4.setCellValue("Banco Receptor");
+            headerCell4.setCellStyle(headerStyle);
 
             // Agregar datos de todas las transferencias
             int rowNum = 1;
             for (TransferDTO transferencia : transferencias) {
                 Row row = sheet.createRow(rowNum++);
-                row.createCell(0).setCellValue(transferencia.getName());
-                row.createCell(1).setCellValue(transferencia.getCuit());
-                row.createCell(2).setCellValue(transferencia.getAmount());
-                row.createCell(3).setCellValue(transferencia.getBank());
+                row.createCell(0).setCellValue(transferencia.getDate());
+                row.createCell(1).setCellValue(transferencia.getTypeOFTransfer());
+                row.createCell(2).setCellValue(transferencia.getCuit());
+                row.createCell(3).setCellValue(transferencia.getAmount());
+                row.createCell(4).setCellValue(transferencia.getBank());
             }
 
             // Ajustar el ancho de las columnas
@@ -72,7 +94,8 @@ public class TelegramFileService {
             }
 
             // Guardar el archivo
-            String fileName = EXCEL_FOLDER + "transferencias_concatenadas.xlsx";
+            String timeStap = String.valueOf(System.currentTimeMillis());
+            String fileName = EXCEL_FOLDER + "transferencias_concatenadas"+ timeStap + ".xlsx";
             java.io.FileOutputStream fileOut = new java.io.FileOutputStream(fileName);
             workbook.write(fileOut);
             fileOut.close();

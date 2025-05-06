@@ -1,7 +1,5 @@
-com\bot\telegramdocreader\config\TelegramBotConfig.class
+com\bot\telegramdocreader\utils\ImageProcessor.class
+com\bot\telegramdocreader\service\ExportExcel.class
 com\bot\telegramdocreader\bot\TelegramDocBot.class
 com\bot\telegramdocreader\utils\PdfProcessor.class
 com\bot\telegramdocreader\TelegramDocReaderApplication.class
-com\bot\telegramdocreader\service\DocumentProcessingService.class
-com\bot\telegramdocreader\utils\ImageProcessor.class
-com\bot\telegramdocreader\service\ExportExcel.class

@@ -3,7 +3,7 @@ package com.bot.telegramdocreader.service;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import com.bot.telegramdocreader.dto.SenderDTO;
+
 import com.bot.telegramdocreader.dto.TransferDTO;
 
 import java.io.FileOutputStream;
@@ -22,17 +22,25 @@ public class ExportExcel {
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Emisor");
 
+            // Crear estilo para encabezados en negrita
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+
             // Encabezados
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"Nombre", "CUIT", "Monto", "Banco"};
+            String[] headers = {"Fecha", "Tipo de Operación", "Cuit", "Monto Bruto", "Banco Receptor"};
             
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
                 cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
             }
 
             Row dataRow = sheet.createRow(1);
-            dataRow.createCell(0).setCellValue(transferencia.getName());
+            dataRow.createCell(0).setCellValue(transferencia.getDate());
+            dataRow.createCell(1).setCellValue(transferencia.getTypeOFTransfer());
             dataRow.createCell(1).setCellValue(transferencia.getCuit());
             dataRow.createCell(2).setCellValue(transferencia.getAmount());
             dataRow.createCell(3).setCellValue(transferencia.getBank());
@@ -66,57 +74,4 @@ public class ExportExcel {
         }
     }
 
-    
-    public static String exportSenderToExcel(SenderDTO sender) throws IOException {
-        if (sender == null) {
-            throw new IllegalArgumentException("El remitente no puede ser nulo");
-        }
-
-        String fileName = null;
-        try (Workbook workbook = new XSSFWorkbook()) {
-            Sheet sheet = workbook.createSheet("Remitente");
-
-            // Encabezados
-            Row headerRow = sheet.createRow(0);
-            String[] headers = {"Nombre", "CUIT", "Monto", "Banco"};
-            
-            for (int i = 0; i < headers.length; i++) {
-                Cell cell = headerRow.createCell(i);
-                cell.setCellValue(headers[i]);
-            }
-
-            Row dataRow = sheet.createRow(1);
-            dataRow.createCell(0).setCellValue(sender.getName());
-            dataRow.createCell(1).setCellValue(sender.getCuit());
-            dataRow.createCell(2).setCellValue(sender.getAccountNumber());
-            dataRow.createCell(3).setCellValue(sender.getBank());
-
-            // Ajustar ancho de columnas
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
-
-            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            fileName = System.getProperty("user.dir") + "/excelFolder/Transferencia_" + timestamp + ".xlsx";
-            
-            // Crear directorio si no existe
-            java.io.File directory = new java.io.File(System.getProperty("user.dir") + "/excelFolder");
-            if (!directory.exists()) {
-                if (!directory.mkdirs()) {
-                    throw new IOException("No se pudo crear el directorio para los archivos Excel");
-                }
-            }
-            
-            // Guardar archivo
-            try (FileOutputStream fileOut = new FileOutputStream(fileName)) {
-                workbook.write(fileOut);
-                System.out.println("Archivo Excel guardado en: " + fileName);
-            }
-
-            return "Archivo Excel creado exitosamente.";
-            
-        } catch (IOException e) {
-            throw new IOException("Error al crear archivo Excel: " + e.getMessage(), e);
-        }
-    }
 }
