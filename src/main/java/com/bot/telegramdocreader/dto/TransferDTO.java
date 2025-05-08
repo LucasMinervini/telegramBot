@@ -16,9 +16,9 @@ public class TransferDTO {
     private String date;
     private String bank;
     private String typeOFTransfer;
-    private String cuentaOrigen;    
-    private String cbuOrigen;       
-    private String titularOrigen;   
+    private String cuentaDestino;    
+    private String cbuDestino;       
+     
       
     
     public String receiverDetails() {

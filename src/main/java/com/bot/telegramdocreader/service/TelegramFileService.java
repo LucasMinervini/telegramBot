@@ -30,8 +30,10 @@ public class TelegramFileService {
         try {
             // Agregar la transferencia a la lista
             this.transferencias.add(transferencia);
-            // Generar el archivo Excel
-            return ExportExcel.exportTransferToExcel(transferencia);
+            // Generar el archivo Excel en memoria
+            ExportExcel.exportTransferToExcel(transferencia);
+            // Guardar el archivo Excel
+            return ExportExcel.saveExcelFile();
         } catch (IllegalArgumentException e) {
             return "Error de validación: " + e.getMessage();
         } catch (IOException e) {

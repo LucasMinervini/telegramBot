@@ -37,6 +37,7 @@ public class DocumentProcessingService {
     // Este método se encarga de procesar el documento recibido por el bot
     public String processDocument(Document doc, String botToken) throws Exception {
         String textoExtraido;
+        boolean isPdfFormat = isPdf(doc); // Verificamos si es un PDF antes de procesar
         
         try {
             if (isImage(doc)) {
@@ -62,7 +63,7 @@ public class DocumentProcessingService {
             }
             
             // Mapper Transferencia 
-            TransferDTO transferencia = mapearTransferencia(textoExtraido);
+            TransferDTO transferencia = mapearTransferencia(textoExtraido, isPdfFormat);
             this.lastTransfer = transferencia; // Guardar la transferencia
 
             if (transferencia != null) {
@@ -73,12 +74,26 @@ public class DocumentProcessingService {
                         return "Error al generar el archivo Excel: " + excelResult;
                     }
                     // Retornar los detalles de la transferencia
-                    return String.format("Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s", 
-                        transferencia.getDate(),
-                        transferencia.getTypeOFTransfer(),
-                        transferencia.getCuit(),
-                        transferencia.getAmount(),
-                        transferencia.getBank());
+                    String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
+                    if (transferencia.getBank().equals("PREX")) {
+                        formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s\nCBU/CVU Destino: %s\nCuenta Destino: %s";
+                        return String.format(formatoBase,
+                            transferencia.getDate(),
+                            transferencia.getTypeOFTransfer(),
+                            transferencia.getCuit(),
+                            transferencia.getAmount(),
+                            transferencia.getBank(),
+                            transferencia.getCbuDestino(),
+                            transferencia.getCuentaDestino()
+                            );
+                    } else {
+                        return String.format(formatoBase,
+                            transferencia.getDate(),
+                            transferencia.getTypeOFTransfer(),
+                            transferencia.getCuit(),
+                            transferencia.getAmount(),
+                            transferencia.getBank());
+                    }
                 } catch (IOException e) {
                     System.out.println("Error al generar el archivo Excel: " + e.getMessage());
                     return "Error al generar el archivo Excel: " + e.getMessage();
@@ -114,7 +129,14 @@ public class DocumentProcessingService {
     
     // Método para verificar si el archivo es un PDF
     private boolean isPdf(Document doc) {
-        return doc.getFileName().toLowerCase().endsWith(".pdf");
+        String fileName = doc.getFileName().toLowerCase();
+        String mimeType = doc.getMimeType().toLowerCase();
+        
+        // Verificar por extensión de archivo y tipo MIME
+        boolean isPdfByExtension = fileName.endsWith(".pdf");
+        boolean isPdfByMimeType = mimeType.equals("application/pdf");
+        
+        return isPdfByExtension || isPdfByMimeType;
     }
 
     // Método para extraer texto de un archivo PDF 
@@ -183,7 +205,7 @@ public class DocumentProcessingService {
         return this.lastTransfer;
     }
 
-    private TransferDTO mapearTransferencia(String textoExtraido) {
+    private TransferDTO mapearTransferencia(String textoExtraido, boolean isPdfFormat) {
         String[] lineas = textoExtraido.split("\\r?\\n");
     
         String destinatario = "";
@@ -194,12 +216,17 @@ public class DocumentProcessingService {
         String tipoOperacion = "";
         String cuentaOrigen = "";
         String cbuOrigen = "";
-        boolean isPdfFormat = textoExtraido.contains("PDF") || textoExtraido.contains("pdf");
-        boolean encontradoEmisor = false;
+        boolean encontradoFecha = false;
+        boolean procesandoReceptor = true; // Inicializamos en true para permitir la detección del banco
     
         // Primero buscar el tipo de operación en todo el texto
         String textoLower = textoExtraido.toLowerCase();
-        if (textoLower.contains("comprobante de transferencia")) {
+        if (textoLower.contains("comprobante de transferencia") || 
+            textoLower.contains("transferencia enviada") || 
+            textoLower.contains("envío de dinero") || 
+            textoLower.contains("envio de dinero") || 
+            textoLower.contains("transferencia realizada") || 
+            (textoLower.contains("transferencia") && textoLower.contains("$"))) {
             tipoOperacion = "Transferencia";
         } else if (textoLower.contains("depósito") || textoLower.contains("deposito")) {
             tipoOperacion = "Depósito";
@@ -220,88 +247,171 @@ public class DocumentProcessingService {
                         tipoOperacion = "Depósito";
                     }
                 }
+                if (lower.contains("de") || 
+                lower.contains("hs") || 
+                lower.contains("enero") || 
+                lower.contains("febrero") || 
+                lower.contains("marzo") || 
+                lower.contains("abril") || 
+                lower.contains("mayo") || 
+                lower.contains("junio") || 
+                lower.contains("julio") || 
+                lower.contains("agosto") || 
+                lower.contains("septiembre") || 
+                lower.contains("octubre") || 
+                lower.contains("noviembre") || 
+                lower.contains("diciembre")) {
+                    fecha = linea.trim();
+                }
             }
 
             if (isPdfFormat) {
+                
 
+                if (textoLower.contains("prex")) {
+                    // Procesar comprobante PREX
+                    bancoReceptor = "PREX";
+                    
+                    // Establecer tipo de operación primero
+                    if (textoLower.contains("comprobante de transferencia") || 
+                        textoLower.contains("transferencia enviada") || 
+                        textoLower.contains("envío de dinero") || 
+                        textoLower.contains("envio de dinero")) {
+                        tipoOperacion = "Transferencia";
+                    }
+                    
+                    for (String currentLine : lineas) {
+                        String currentLineLower = currentLine.toLowerCase().trim();
+                        String currentLineOriginal = currentLine.trim();
+                        
+                        // Extraer fecha
+                        if (currentLineLower.contains("de") && currentLineLower.contains("hs")) {
+                            fecha = currentLineOriginal;
+                        }
+                        
+                        // Extraer destinatario
+                        if (currentLineLower.contains("enviaste a:")) {
+                            destinatario = currentLineOriginal.replace("Enviaste a:", "").trim();
+                        }
+                        
+                        // Extraer CUIT/CBU
+                        if (currentLineLower.contains("cvu/cbu:")) {
+                            cuit = currentLineOriginal.replace("CVU/CBU:", "").trim();
+                        }
+                        
+                        // Extraer monto
+                        if (currentLineLower.contains("$")) {
+                            String montoTemp = currentLineOriginal.replaceAll("[^0-9.,]", "").trim();
+                            if (!montoTemp.isEmpty()) {
+                                monto = montoTemp;
+                            }
+                        }
 
-                //Nombre
-                if (lower.contains("de")) {
-                    destinatario = original.replaceAll("(?i)de", "").trim();
-                    // Limpiar el formato específico de Mercado Pago
+                        // Extraer cuenta destino
+                        if (currentLineLower.contains("cuenta destino")) {
+                            cuentaOrigen = currentLineOriginal.replaceAll("(?i)cuenta destino:|:", "").trim();
+                        }
+
+                        // Extraer CBU destino
+                        if (currentLineLower.contains("cbu destino") || currentLineLower.contains("cvu destino")) {
+                            cbuOrigen = currentLineOriginal.replaceAll("(?i)cbu destino:|cvu destino:|:", "").trim();
+                        }
+                    }
+                    
+                    // Si aún no se ha establecido el tipo de operación y hay indicadores
+                    if (tipoOperacion.isEmpty() && (textoLower.contains("transferencia") || textoLower.contains("envío"))) {
+                        tipoOperacion = "Transferencia";
+                    }
+                    
+                    // Retornar el DTO para PREX si tenemos los datos mínimos necesarios
+                    if (!monto.isEmpty() && (!destinatario.isEmpty() || !cuit.isEmpty())) {
+                        return TransferDTO.builder()
+                            .name(destinatario)
+                            .date(fecha)
+                            .typeOFTransfer(tipoOperacion)
+                            .cuit(cuit)
+                            .amount(monto)
+                            .bank(bancoReceptor)
+                            .cuentaDestino(cuentaOrigen)
+                            .cbuDestino(cbuOrigen)
+                            .build();
+                    }
+                }
+                
+                
+
+                // Buscar el destinatario después de "Para"
+                if (  procesandoReceptor && 
+                    (lower.contains("para") || lower.contains("destinatario") ||
+                     lower.contains("beneficiario"))) {
+                    destinatario = original.replaceAll("(?i)(para|destinatario|beneficiario):", "").trim();
                     if (destinatario.startsWith(":")) {
                         destinatario = destinatario.substring(1).trim();
                     }
                     
                 }
 
-                // Extraer fecha del formato específico de Mercado Pago si aún no se encontró
-                if (fecha.isEmpty() && (lower.contains("miércoles") || lower.contains("lunes") || 
+                // Extraer fecha
+                if (!encontradoFecha && (lower.contains("miércoles") || lower.contains("lunes") || 
                     lower.contains("martes") || lower.contains("jueves") || 
                     lower.contains("viernes") || lower.contains("sábado") || 
                     lower.contains("domingo"))) {
                     fecha = extraerFecha(original);
-                    if (fecha.isEmpty()) {
-                        fecha = original.trim();
+                    if (!fecha.isEmpty()) {
+                        encontradoFecha = true;
                     }
                 }
 
-                // Mercado Pago
-                if (lower.contains("mercado pago") || lower.contains("mp") || lower.contains("mercado pago s.a.") || lower.contains("mercadopago")) {
-                    bancoReceptor = "Mercado Pago";
-                }
-                if (lower.contains("banco") || lower.contains("entidad")) {
-                    bancoReceptor = original.replaceAll("(?i)banco:|entidad:|destino:", "").trim();    
-                }
-                //Galicia
-                if (lower.contains("galicia") || lower.contains("galicia bancaria") || lower.contains("galicia bancaria s.a.")) {
-                    bancoReceptor = "Galicia";
-                }
-                //BBVA
-                if (lower.contains("bbva") || lower.contains("bbva bancaria") || lower.contains("bbva bancaria s.a.")) {
-                    bancoReceptor = "BBVA";
-                }
-                //Nacion    
-                if (lower.contains("nacion") || lower.contains("nacion bancaria") || lower.contains("nacion bancaria s.a.")) {
-                    bancoReceptor = "Nación";   
-                }
-                //HSBC
-                if (lower.contains("hsbc") || lower.contains("hsbc bancaria") || lower.contains("hsbc bancaria s.a.")) {
-                    bancoReceptor = "HSBC";
-                }
-                //ITAU  
-                if (lower.contains("itau") || lower.contains("itau bancaria") || lower.contains("itau bancaria s.a.")) {
-                    bancoReceptor = "ITAU";
-                }
-                //PREX
-                if (lower.contains("prex") || lower.contains("prex bancaria") || lower.contains("prex bancaria s.a.") || lower.contains("fargotez") || lower.contains("fargotez sa")) {
-                    bancoReceptor = "PREX";
-                    // Procesar datos específicos de Prex si están disponibles
-                    if (lower.contains("enviaste") || lower.contains("enviaste a")) {
-                        monto = original.replaceAll("[^0-9.,]", "").trim();
+                // Identificar banco receptor
+                if (procesandoReceptor) {
+                    // Primero verificar si es NEBLOCKCHAIN
+                    if (textoLower.contains("neblockchain") || textoLower.contains("neblockchain sa")) {
+                        bancoReceptor = "NEBLOCKCHAIN SA";
                     }
-                    if (lower.contains("cvu/cbu") || lower.contains("cvu destino") || lower.contains("cbu destino")) {
-                        cbuOrigen = original.replaceAll("(?i)cvu/cbu:|cvu destino:|cbu destino:|:", "").trim();
+                    // Si no es NEBLOCKCHAIN, verificar otros bancos
+                    else if (bancoReceptor.isEmpty()) {
+                        if (lower.contains("mercado pago") || lower.contains("mp") || lower.contains("mercado pago s.a.") || lower.contains("mercadopago")) {
+                            bancoReceptor = "Mercado Pago";
+                        } else if (lower.contains("banco") || lower.contains("entidad")) {
+                            bancoReceptor = original.replaceAll("(?i)banco:|entidad:|destino:|:", "").trim();
+                            // Limpiar el nombre del banco de palabras comunes
+                            bancoReceptor = bancoReceptor.replaceAll("(?i)banco|entidad|receptor|destino", "").trim();
+                        } else if (lower.contains("para") || lower.contains("destinatario") || lower.contains("beneficiario")) {
+                            String posibleBanco = original.replaceAll("(?i)para:|destinatario:|beneficiario:|:", "").trim();
+                            if (!posibleBanco.isEmpty() && bancoReceptor.isEmpty()) {
+                                bancoReceptor = posibleBanco;
+                            }
+                        }
                     }
-                }
-
-                // CUIT/CUIL Del Emisor
-                if (!encontradoEmisor && (lower.contains("cuit origen") || lower.contains("cuil origen") || 
-                    lower.contains("cuit emisor") || lower.contains("cuil emisor") || 
-                    (lower.contains("cuit") && (lower.contains("de:") || lower.contains("origen") || lower.contains("emisor"))) || 
-                    lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*"))) {
                     
+                    // Normalizar el nombre del banco si se encontró
+                    if (!bancoReceptor.isEmpty()) {
+                        bancoReceptor = bancoReceptor.replaceAll("\s+", " ").trim();
+                        // Convertir primera letra de cada palabra a mayúscula
+                        String[] palabras = bancoReceptor.split(" ");
+                        StringBuilder nombreFormateado = new StringBuilder();
+                        for (String palabra : palabras) {
+                            if (!palabra.isEmpty()) {
+                                if (nombreFormateado.length() > 0) nombreFormateado.append(" ");
+                                nombreFormateado.append(Character.toUpperCase(palabra.charAt(0)))
+                                               .append(palabra.substring(1).toLowerCase());
+                            }
+                        }
+                        bancoReceptor = nombreFormateado.toString();
+                    }
+                }
+
+                // CUIT/CUIL del destinatario
+                if (procesandoReceptor && lower.contains("cuit") || lower.contains("cuil")) {
                     java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\d{2}-\\d{8}-\\d{1}");
                     java.util.regex.Matcher matcher = pattern.matcher(original);
                     if (matcher.find()) {
                         cuit = matcher.group();
-                        encontradoEmisor = true;
                     } else {
-                        // Si no se encuentra el patrón directo, intentar limpiar el texto
+                        // Intentar limpiar el texto
                         String cuitTemp = original.replaceAll("(?i).*(?:cuit|cuil)[^0-9-]*([0-9-]+).*", "$1").trim();
                         if (cuitTemp.matches("\\d{11}")) {
                             cuit = cuitTemp.substring(0, 2) + "-" + cuitTemp.substring(2, 10) + "-" + cuitTemp.substring(10);
-                            encontradoEmisor = true;
                         }
                     }
                 }
@@ -315,20 +425,10 @@ public class DocumentProcessingService {
                 if (lower.contains("cvu:")) {
                     cbuOrigen = original.replaceAll("(?i)cvu:|:", "").trim();
                 }
-                
-
-                // Buscar CBU en formato numérico (22 dígitos)
-                if (cbuOrigen.isEmpty() && lower.matches(".*\\d{22}.*")) {
-                    java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\d{22}");
-                    java.util.regex.Matcher matcher = pattern.matcher(lower);
-                    if (matcher.find()) {
-                        cbuOrigen = matcher.group();
-                    }
-                }
             } else {
-                    // Lógica para imágenes
+                    // LÓGICA PARA IMÁGENES
 
-                
+
                 //Nombre
                 if (lower.startsWith("a") || lower.contains("destinatario") || lower.contains("beneficiario")) {
                     destinatario = original.replaceAll("(?i)a |destinatario:|beneficiario:", "").trim();
@@ -337,29 +437,29 @@ public class DocumentProcessingService {
                 
                 //Fecha
                 // Verificar si es Mercado Pago y buscar el formato específico
-                if ( lower.contains("lunes") || 
-                lower.contains("martes") || 
-                lower.contains("miércoles") ||  
-                lower.contains("jueves") || 
-                lower.contains("viernes") || 
-                lower.contains("sábado") || 
-                lower.contains("domingo") ||
-                lower.matches(".*\\d{1,2}\\s+de\\s+[a-záéíóúñ]+\\s+de\\s+\\d{4}.*")) {
+                if ( lower.contains("enero") || 
+                lower.contains("febrero") || 
+                lower.contains("marzo") ||  
+                lower.contains("abril") || 
+                lower.contains("mayo") || 
+                lower.contains("junio") || 
+                lower.contains("julio") ||
+                lower.contains("agosto") ||
+                lower.contains("septiembre") ||
+                lower.contains("octubre") ||
+                lower.contains("noviembre") ||
+                lower.contains("diciembre")){
                     fecha = extraerFecha(original);
                 } else if (lower.contains("fecha") || lower.contains("fecha de operación") || 
                     lower.matches(".*\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{4}.*") || 
                     lower.matches(".*\\d{1,2}\\s+de\\s+\\w+\\s+de\\s+\\d{4}.*") 
                     ) {
-                    
-                    
                     fecha = extraerFecha(original);
-                    
                     // Si no se encontró fecha, intentar limpiar el texto
                     if (fecha.isEmpty()) {
                         String textoLimpio = original.replaceAll("(?i)fecha de operación:|fecha:|:", "").trim();
                         fecha = extraerFecha(textoLimpio);
                     }
-                    
                     // Si aún está vacío, intentar con el texto original
                     if (fecha.isEmpty()) {
                         fecha = original.trim();
@@ -367,7 +467,8 @@ public class DocumentProcessingService {
 
                 // Tipo de operación
                 if (lower.contains("transferencia") || lower.contains("transferido") ||
-                    lower.contains("transferiste") || lower.contains("transferir")) {
+                    lower.contains("transferiste") || lower.contains("transferir") || 
+                    lower.contains("Transferencia enviada") || lower.contains("transferencia enviada")) {
                     tipoOperacion = "Transferencia";
                     } else if (lower.contains("depósito") || lower.contains("deposito")) {
                         tipoOperacion = "Depósito";
@@ -379,37 +480,45 @@ public class DocumentProcessingService {
                     monto = original.replaceAll("(?i)importe:|monto:|\\$", "").trim();
                 }
                 // CUIT/CUIL - Búsqueda mejorada para el emisor
-                if (!encontradoEmisor && (lower.contains("cuit origen") || lower.contains("cuil origen") || 
-                    lower.contains("cuit emisor") || lower.contains("cuil emisor") || 
-                    (lower.contains("cuit") && (lower.contains("de:") || lower.contains("origen") || lower.contains("emisor"))) || 
+                if (( lower.contains("cuit emisor") || lower.contains("cuil emisor") || 
+                    (lower.contains("cuit") && (lower.contains("de:") || 
+                    lower.contains("origen") || lower.contains("emisor"))) || 
                     lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*"))) {
                     
                     java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\d{2}-\\d{8}-\\d{1}");
                     java.util.regex.Matcher matcher = pattern.matcher(original);
                     if (matcher.find()) {
                         cuit = matcher.group();
-                        encontradoEmisor = true;
+                        
                     } else {
                         // Si no se encuentra el patrón directo, intentar limpiar el texto
                         String cuitTemp = original.replaceAll("(?i).*(?:cuit|cuil)[^0-9-]*([0-9-]+).*", "$1").trim();
                         if (cuitTemp.matches("\\d{11}")) {
                             cuit = cuitTemp.substring(0, 2) + "-" + cuitTemp.substring(2, 10) + "-" + cuitTemp.substring(10);
-                            encontradoEmisor = true;
+                            
                         }
                     }
                 }
                 // Banco
-                if (lower.contains("banco") || lower.contains("entidad")) {
+                if (lower.contains("neblockchain") || lower.contains("neblockchain sa")) {
+                    bancoReceptor = "NEBLOCKCHAIN SA";
+                } else if (lower.contains("banco") || lower.contains("entidad")) {
                     bancoReceptor = original.replaceAll("(?i)|banco:|entidad:|destino:", "").trim();
-                }
-                if (lower.contains("mercado pago") || lower.contains("mp") || lower.contains("mercado pago s.a.") || lower.contains("mercadopago")) {
+                } else if (lower.contains("mercado pago") || lower.contains("mp") || lower.contains("mercado pago s.a.") || lower.contains("mercadopago")) {
                     bancoReceptor = "Mercado Pago";
+                }
+                
+                else if (lower.contains("para") || lower.contains("destinatario") || lower.contains("beneficiario")) {
+                    String posibleBanco = original.replaceAll("(?i)para:|destinatario:|beneficiario:", "").trim();
+                    if (!posibleBanco.isEmpty() && bancoReceptor.isEmpty()) {
+                        bancoReceptor = posibleBanco;
+                    }
                 }
                 
             }
         }
     
-        // Si no se identificó el tipo de operación, asignar "No especificado"
+        
         if (tipoOperacion.isEmpty()) {
             tipoOperacion = "No especificado";
         }
@@ -423,24 +532,48 @@ public class DocumentProcessingService {
                 .cuit(cuit)
                 .amount(monto)
                 .bank(bancoReceptor)
-                .cuentaOrigen(cuentaOrigen)
-                .cbuOrigen(cbuOrigen)
+                .cuentaDestino(cuentaOrigen)
+                .cbuDestino(cbuOrigen)
                 .build();
             return transferencia;
         }
-        return null;
-    }
+        return null;}
+    
 
     private String extraerFecha(String texto) {
+
+
+        
+        String patronBrubank = "\\d{1,2}\\s+de\\s+[a-záéíóúñ]+\\s+de\\s+\\d{4}\\s*-\\s*\\d{2}:\\d{2}";
+        java.util.regex.Pattern patternBrubank = java.util.regex.Pattern.compile(patronBrubank, java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.regex.Matcher matcherBrubank = patternBrubank.matcher(texto);
+        
+        if (matcherBrubank.find()) {
+            String fechaCompleta = matcherBrubank.group();
+            // Extraer solo la parte de la fecha sin la hora
+            String[] partes = fechaCompleta.split("-");
+            if (partes.length > 0) {
+                return convertirFechaTextoANumerica(partes[0].trim());
+            }
+        }
+
         // Verificar si es un formato de fecha en texto (dd de mes de yyyy)
-        String patronFechaTexto = "\\d{1,2}\\s*(?:de\\s+)?[a-záéíóúñ]+\\s+(?:de\\s+)?\\d{4}";
+        String patronFechaTexto = "\\d{1,2}\\s*(?:de\\s+)?[a-záéíóúñ]+\\s*(?:de\\s+)?\\d{4}";
         java.util.regex.Pattern patternFechaTexto = java.util.regex.Pattern.compile(patronFechaTexto, java.util.regex.Pattern.CASE_INSENSITIVE);
         java.util.regex.Matcher matcherFechaTexto = patternFechaTexto.matcher(texto);
         
         if (matcherFechaTexto.find()) {
             String fechaTexto = matcherFechaTexto.group();
-            fechaTexto = fechaTexto.replaceAll("(\\d+)\\s+([a-záéíóúñ]+)", "$1 de $2");
-            fechaTexto = fechaTexto.replaceAll("([a-záéíóúñ]+)\\s+(\\d{4})", "$1 de $2");
+            // Primero eliminar cualquier 'de' existente y espacios extras
+            fechaTexto = fechaTexto.replaceAll("(?i)\\s+de\\s+", " ").trim();
+            // Separar las partes
+            String[] partes = fechaTexto.split("\\s+");
+            if (partes.length == 3) {
+                fechaTexto = partes[0] + " de " + partes[1] + " de " + partes[2];
+            } else if (partes.length == 2) {
+                // Si solo hay dos partes, asumimos que son mes y año
+                fechaTexto = "1 de " + partes[0] + " de " + partes[1];
+            }
             return convertirFechaTextoANumerica(fechaTexto);
         }
         
