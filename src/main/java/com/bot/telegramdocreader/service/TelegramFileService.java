@@ -16,12 +16,16 @@ public class TelegramFileService {
 
     private List<TransferDTO> transferencias;
     private static final String EXCEL_FOLDER = "excelsConcatenados/";
+    private final GoogleDriveService googleDriveService;
 
-    public TelegramFileService() {
+    public TelegramFileService(GoogleDriveService googleDriveService) {
+        this.googleDriveService = googleDriveService;
         this.transferencias = new ArrayList<>();
         // Crear el directorio si no existe
         new File(EXCEL_FOLDER).mkdirs();
     }
+
+
 
     public String createExcelFile(TransferDTO transferencia) {
         if (transferencia == null) {
@@ -110,7 +114,6 @@ public class TelegramFileService {
             if (excelFiles != null) {
                 for (File excelFile : excelFiles) {
                     if (excelFile.delete()) {
-                        System.out.println("Archivo eliminado: " + excelFile.getName());
                     } else {
                         System.out.println("No se pudo eliminar el archivo: " + excelFile.getName());
                     }
@@ -123,4 +126,8 @@ public class TelegramFileService {
             return "Error al crear el archivo Excel concatenado: " + e.getMessage();
         }
     }
+
+    public String uploadToDrive(String filePath) {
+        return googleDriveService.uploadFile(filePath, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
+}

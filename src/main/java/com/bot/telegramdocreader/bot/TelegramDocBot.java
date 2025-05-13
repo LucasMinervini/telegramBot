@@ -87,8 +87,13 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             saveButton.setText("Guardar Excel");
             saveButton.setCallbackData("save_excel");
 
+            InlineKeyboardButton driveButton = new InlineKeyboardButton();
+            driveButton.setText("Guardar en Drive");
+            driveButton.setCallbackData("save_to_drive");
+
             rowInline.add(downloadButton);
             rowInline.add(saveButton);
+            rowInline.add(driveButton);
             rowsInline.add(rowInline);
             markupInline.setKeyboard(rowsInline);
 
@@ -142,6 +147,14 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                     execute(new SendMessage(chatId, "El archivo Excel se ha guardado exitosamente en la carpeta."));
                 } else {
                     execute(new SendMessage(chatId, excelResult));
+                }
+            } else if ("save_to_drive".equals(callbackData)) {
+                String excelFilePath = telegramFileService.createConcatenatedExcelFile();
+                if (!excelFilePath.startsWith("Error")) {
+                    String driveResult = telegramFileService.uploadToDrive(excelFilePath);
+                    execute(new SendMessage(chatId, driveResult));
+                } else {
+                    execute(new SendMessage(chatId, excelFilePath));
                 }
             }
         } catch (Exception e) {

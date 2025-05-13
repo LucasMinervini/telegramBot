@@ -1,0 +1,44 @@
+# Archivos y directorios de Maven
+target/
+*.class
+
+# Archivos de IDE
+.idea/
+*.iml
+*.iws
+.vscode/
+
+# Archivos de configuración local
+application-local.properties
+application-local.yml
+
+# Tokens y credenciales
+tokens/
+*.tokens
+/src/main/resources/credentials.json
+
+# Logs
+*.log
+logs/
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.temp
+*.swp
+~*
+
+# Directorios de dependencias
+.mvn/
+.settings/
+.classpath
+.project
+
+# Archivos de prueba y cobertura
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
