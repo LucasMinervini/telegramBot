@@ -48,6 +48,10 @@ public class TelegramFileService {
             return "Error: No hay transferencias para concatenar";
         }
 
+        // Obtener la lista de archivos Excel en la carpeta
+        File folder = new File("excelFolder");
+        File[] excelFiles = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".xlsx"));
+
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Transferencias Concatenadas");
 
@@ -101,6 +105,17 @@ public class TelegramFileService {
             java.io.FileOutputStream fileOut = new java.io.FileOutputStream(fileName);
             workbook.write(fileOut);
             fileOut.close();
+
+            // Eliminar los archivos Excel individuales
+            if (excelFiles != null) {
+                for (File excelFile : excelFiles) {
+                    if (excelFile.delete()) {
+                        System.out.println("Archivo eliminado: " + excelFile.getName());
+                    } else {
+                        System.out.println("No se pudo eliminar el archivo: " + excelFile.getName());
+                    }
+                }
+            }
 
             return fileName;
 

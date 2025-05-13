@@ -214,22 +214,99 @@ public class DocumentProcessingService {
         String monto = "";
         String bancoReceptor = "";
         String tipoOperacion = "";
-        String cuentaOrigen = "";
-        String cbuOrigen = "";
+        String cbuDestino = "";
+        String cuentaDestino = "";
         boolean encontradoFecha = false;
-        boolean procesandoReceptor = true; // Inicializamos en true para permitir la detección del banco
+        boolean procesandoReceptor = true; 
     
-        // Primero buscar el tipo de operación en todo el texto
+        // Convertir todo el texto a minúsculas una sola vez
         String textoLower = textoExtraido.toLowerCase();
-        if (textoLower.contains("comprobante de transferencia") || 
-            textoLower.contains("transferencia enviada") || 
-            textoLower.contains("envío de dinero") || 
-            textoLower.contains("envio de dinero") || 
-            textoLower.contains("transferencia realizada") || 
-            (textoLower.contains("transferencia") && textoLower.contains("$"))) {
+
+        // Verificar primero si es un comprobante PREX antes de cualquier otro procesamiento
+        if (textoLower.contains("prex")) {
+            bancoReceptor = "PREX";
             tipoOperacion = "Transferencia";
-        } else if (textoLower.contains("depósito") || textoLower.contains("deposito")) {
-            tipoOperacion = "Depósito";
+        }
+        
+        // Si no es PREX, buscar el tipo de operación en todo el texto
+        if (tipoOperacion.isEmpty()) {
+            if (textoLower.contains("comprobante de transferencia") || 
+                textoLower.contains("transferencia enviada") || 
+                textoLower.contains("envío de dinero") || 
+                textoLower.contains("envio de dinero") || 
+                textoLower.contains("transferencia realizada") || 
+                (textoLower.contains("transferencia") && textoLower.contains("$"))) {
+                tipoOperacion = "Transferencia";
+            } else if (textoLower.contains("depósito") || textoLower.contains("deposito")) {
+                tipoOperacion = "Depósito";
+            }
+        }
+
+        // Detectar si es un comprobante PREX
+        if (textoLower.contains("prex")) {
+            bancoReceptor = "PREX";
+            for (String linea : lineas) {
+                String lineaLower = linea.toLowerCase().trim();
+                String lineaOriginal = linea.trim();
+
+                // Extraer fecha
+                if (lineaLower.contains("de") && lineaLower.contains("hs")) {
+                    fecha = lineaOriginal;
+                }
+
+                // Extraer monto
+                if (lineaLower.contains("enviaste:") || lineaLower.contains("$")) {
+                    String montoTemp = lineaOriginal.replaceAll("[^0-9.,]", "").trim();
+                    if (!montoTemp.isEmpty()) {
+                        monto = montoTemp;
+                    }
+                }
+
+                // Extraer destinatario
+                if (lineaLower.contains("enviaste a:")) {
+                    destinatario = lineaOriginal.replace("Enviaste a:", "").trim();
+                }
+
+                // Extraer CUIT/CUIL
+                if (lineaLower.contains("cuit/cuil:")) {
+                    cuit = lineaOriginal.replace("CUIT/CUIL:", "").trim();
+                } else if (lineaLower.contains("cuit:")) {
+                    cuit = lineaOriginal.replace("CUIT:", "").trim();
+                } else if (lineaLower.contains("cuil:")) {
+                    cuit = lineaOriginal.replace("CUIL:", "").trim();
+                }
+
+                // Extraer CBU/CVU
+                if (lineaLower.contains("cvu/cbu:")) {
+                    cbuDestino = lineaOriginal.replace("CVU/CBU:", "").trim();
+                } else if (lineaLower.contains("cvu destino:")) {
+                    cbuDestino = lineaOriginal.replace("CVU destino:", "").trim();
+                } else if (lineaLower.contains("cbu destino:")) {
+                    cbuDestino = lineaOriginal.replace("CBU destino:", "").trim();
+                }
+
+                // Extraer cuenta destino
+                if (lineaLower.contains("cuenta destino")) {
+                    cuentaDestino = lineaOriginal.replace("Cuenta destino", "").trim();
+                    if (cuentaDestino.startsWith(":")) {
+                        cuentaDestino = cuentaDestino.substring(1).trim();
+                    }
+                }
+            }
+
+            // Crear y retornar el DTO para PREX
+            if (!monto.isEmpty() && (!destinatario.isEmpty() || !cuit.isEmpty())) {
+                return TransferDTO.builder()
+                    .name(destinatario)
+                    .date(fecha)
+                    .typeOFTransfer(tipoOperacion)
+                    .cuit(cuit)
+                    .amount(monto)
+                    .bank(bancoReceptor)
+                    .cbuDestino(cbuDestino)
+                    .cuentaDestino(cuentaDestino)
+                    .build();
+            }
         }
 
         for (int i = 0; i < lineas.length; i++) {
@@ -296,25 +373,41 @@ public class DocumentProcessingService {
                         
                         // Extraer CUIT/CBU
                         if (currentLineLower.contains("cvu/cbu:")) {
-                            cuit = currentLineOriginal.replace("CVU/CBU:", "").trim();
+                            cbuDestino = currentLineOriginal.replace("CVU/CBU:", "").trim();
+                        } else if (currentLineLower.contains("cvu destino:")) {
+                            cbuDestino = currentLineOriginal.replace("CVU destino:", "").trim();
+                        } else if (currentLineLower.contains("cbu destino:")) {
+                            cbuDestino = currentLineOriginal.replace("CBU destino:", "").trim();
+                        }
+                        
+                        // Extraer CUIT/CUIL
+                        if (currentLineLower.contains("cuit/cuil:")) {
+                            cuit = currentLineOriginal.replace("CUIT/CUIL:", "").trim();
+                        } else if (currentLineLower.contains("cuit:")) {
+                            cuit = currentLineOriginal.replace("CUIT:", "").trim();
+                        } else if (currentLineLower.contains("cuil:")) {
+                            cuit = currentLineOriginal.replace("CUIL:", "").trim();
+                        }
+                        
+                        // Extraer cuenta destino
+                        if (currentLineLower.contains("cuenta destino")) {
+                            cuentaDestino = currentLineOriginal.replace("Cuenta destino", "").trim();
+                            if (cuentaDestino.startsWith(":")) {
+                                cuentaDestino = cuentaDestino.substring(1).trim();
+                            }
                         }
                         
                         // Extraer monto
-                        if (currentLineLower.contains("$")) {
+                        if (currentLineLower.contains("enviaste") && currentLineLower.contains("$")) {
                             String montoTemp = currentLineOriginal.replaceAll("[^0-9.,]", "").trim();
                             if (!montoTemp.isEmpty()) {
                                 monto = montoTemp;
                             }
-                        }
-
-                        // Extraer cuenta destino
-                        if (currentLineLower.contains("cuenta destino")) {
-                            cuentaOrigen = currentLineOriginal.replaceAll("(?i)cuenta destino:|:", "").trim();
-                        }
-
-                        // Extraer CBU destino
-                        if (currentLineLower.contains("cbu destino") || currentLineLower.contains("cvu destino")) {
-                            cbuOrigen = currentLineOriginal.replaceAll("(?i)cbu destino:|cvu destino:|:", "").trim();
+                        } else if (currentLineLower.contains("$") && monto.isEmpty()) {
+                            String montoTemp = currentLineOriginal.replaceAll("[^0-9.,]", "").trim();
+                            if (!montoTemp.isEmpty()) {
+                                monto = montoTemp;
+                            }
                         }
                     }
                     
@@ -332,73 +425,67 @@ public class DocumentProcessingService {
                             .cuit(cuit)
                             .amount(monto)
                             .bank(bancoReceptor)
-                            .cuentaDestino(cuentaOrigen)
-                            .cbuDestino(cbuOrigen)
+                            .cbuDestino(cbuDestino)
+                            .cuentaDestino(cuentaDestino)
                             .build();
                     }
                 }
                 
                 
 
-                // Buscar el destinatario después de "Para"
-                if (  procesandoReceptor && 
-                    (lower.contains("para") || lower.contains("destinatario") ||
-                     lower.contains("beneficiario"))) {
-                    destinatario = original.replaceAll("(?i)(para|destinatario|beneficiario):", "").trim();
-                    if (destinatario.startsWith(":")) {
-                        destinatario = destinatario.substring(1).trim();
-                    }
-                    
+                // Banco FUNDRAISER
+                if (textoLower.contains("fundraiser")) {
+                    bancoReceptor = "FUNDRAISER s.a.s.";
                 }
 
-                // Extraer fecha
-                if (!encontradoFecha && (lower.contains("miércoles") || lower.contains("lunes") || 
-                    lower.contains("martes") || lower.contains("jueves") || 
-                    lower.contains("viernes") || lower.contains("sábado") || 
-                    lower.contains("domingo"))) {
-                    fecha = extraerFecha(original);
-                    if (!fecha.isEmpty()) {
-                        encontradoFecha = true;
-                    }
-                }
+               
 
-                // Identificar banco receptor
+                // Solo procesar la información si estamos después de "Para"
                 if (procesandoReceptor) {
-                    // Primero verificar si es NEBLOCKCHAIN
-                    if (textoLower.contains("neblockchain") || textoLower.contains("neblockchain sa")) {
-                        bancoReceptor = "NEBLOCKCHAIN SA";
+                    // Extraer fecha
+                    if (!encontradoFecha && (lower.contains("miércoles") || lower.contains("lunes") || 
+                        lower.contains("martes") || lower.contains("jueves") || 
+                        lower.contains("viernes") || lower.contains("sábado") || 
+                        lower.contains("domingo"))) {
+                        fecha = extraerFecha(original);
+                        if (!fecha.isEmpty()) {
+                            encontradoFecha = true;
+                        }
                     }
-                    // Si no es NEBLOCKCHAIN, verificar otros bancos
-                    else if (bancoReceptor.isEmpty()) {
-                        if (lower.contains("mercado pago") || lower.contains("mp") || lower.contains("mercado pago s.a.") || lower.contains("mercadopago")) {
-                            bancoReceptor = "Mercado Pago";
+
+                    // Procesar información del banco si aún no se ha encontrado
+                    if (bancoReceptor.isEmpty()) {
+                        if (lower.contains("neblockchain") || lower.contains("neblockchain sa")) {
+                            bancoReceptor = "NEBLOCKCHAIN SA";
                         } else if (lower.contains("banco") || lower.contains("entidad")) {
-                            bancoReceptor = original.replaceAll("(?i)banco:|entidad:|destino:|:", "").trim();
-                            // Limpiar el nombre del banco de palabras comunes
-                            bancoReceptor = bancoReceptor.replaceAll("(?i)banco|entidad|receptor|destino", "").trim();
-                        } else if (lower.contains("para") || lower.contains("destinatario") || lower.contains("beneficiario")) {
-                            String posibleBanco = original.replaceAll("(?i)para:|destinatario:|beneficiario:|:", "").trim();
-                            if (!posibleBanco.isEmpty() && bancoReceptor.isEmpty()) {
+                            bancoReceptor = original.replaceAll("(?i)banco:|entidad:|destino:", "").trim();
+                        } else if (lower.contains("destinatario") || lower.contains("beneficiario")) {
+                            String posibleBanco = original.replaceAll("(?i)destinatario:|beneficiario:", "").trim();
+                            if (!posibleBanco.isEmpty() && !posibleBanco.equalsIgnoreCase("para")) {
                                 bancoReceptor = posibleBanco;
                             }
                         }
                     }
+                }
+                
+            
+                
+                // Normalizar el nombre del banco si se encontró
+                if (!bancoReceptor.isEmpty()) {
+                    // Eliminar espacios múltiples
+                    bancoReceptor = bancoReceptor.replaceAll("\\s+", " ").trim();
                     
-                    // Normalizar el nombre del banco si se encontró
-                    if (!bancoReceptor.isEmpty()) {
-                        bancoReceptor = bancoReceptor.replaceAll("\s+", " ").trim();
-                        // Convertir primera letra de cada palabra a mayúscula
-                        String[] palabras = bancoReceptor.split(" ");
-                        StringBuilder nombreFormateado = new StringBuilder();
-                        for (String palabra : palabras) {
-                            if (!palabra.isEmpty()) {
-                                if (nombreFormateado.length() > 0) nombreFormateado.append(" ");
-                                nombreFormateado.append(Character.toUpperCase(palabra.charAt(0)))
-                                               .append(palabra.substring(1).toLowerCase());
-                            }
+                    // Convertir primera letra de cada palabra a mayúscula
+                    String[] palabras = bancoReceptor.split(" ");
+                    StringBuilder nombreFormateado = new StringBuilder();
+                    for (String palabra : palabras) {
+                        if (!palabra.isEmpty()) {
+                            if (nombreFormateado.length() > 0) nombreFormateado.append(" ");
+                            nombreFormateado.append(Character.toUpperCase(palabra.charAt(0)))
+                                           .append(palabra.substring(1).toLowerCase());
                         }
-                        bancoReceptor = nombreFormateado.toString();
                     }
+                    bancoReceptor = nombreFormateado.toString();
                 }
 
                 // CUIT/CUIL del destinatario
@@ -421,10 +508,7 @@ public class DocumentProcessingService {
                     monto = original.replaceAll("[^0-9.,]", "").trim();
                 }
 
-                // Información adicional si está disponible
-                if (lower.contains("cvu:")) {
-                    cbuOrigen = original.replaceAll("(?i)cvu:|:", "").trim();
-                }
+               
             } else {
                     // LÓGICA PARA IMÁGENES
 
@@ -532,8 +616,6 @@ public class DocumentProcessingService {
                 .cuit(cuit)
                 .amount(monto)
                 .bank(bancoReceptor)
-                .cuentaDestino(cuentaOrigen)
-                .cbuDestino(cbuOrigen)
                 .build();
             return transferencia;
         }

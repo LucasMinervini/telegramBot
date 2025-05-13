@@ -45,7 +45,12 @@ public class ExportExcel {
 
         // Encabezados
         Row headerRow = sheet.createRow(0);
-        String[] headers = {"Fecha", "Tipo de Operación", "Cuit", "Monto Bruto", "Banco Receptor"};
+        String[] headers;
+        if ("PREX".equals(transferencia.getBank())) {
+            headers = new String[]{"Fecha", "Tipo de Operación", "Cuit", "Monto Bruto", "Banco Receptor", "CBU/CVU Destino", "Cuenta Destino"};
+        } else {
+            headers = new String[]{"Fecha", "Tipo de Operación", "Cuit", "Monto Bruto", "Banco Receptor"};
+        }
         
         for (int i = 0; i < headers.length; i++) {
             Cell cell = headerRow.createCell(i);
@@ -59,6 +64,11 @@ public class ExportExcel {
         dataRow.createCell(2).setCellValue(transferencia.getCuit());
         dataRow.createCell(3).setCellValue(transferencia.getAmount());
         dataRow.createCell(4).setCellValue(transferencia.getBank());
+        
+        if ("PREX".equals(transferencia.getBank())) {
+            dataRow.createCell(5).setCellValue(transferencia.getCbuDestino());
+            dataRow.createCell(6).setCellValue(transferencia.getCuentaDestino());
+        }
         
         // Ajustar ancho de columnas
         for (int i = 0; i < headers.length; i++) {
