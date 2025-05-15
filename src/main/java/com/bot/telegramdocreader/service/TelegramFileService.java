@@ -32,12 +32,26 @@ public class TelegramFileService {
             return "Error: No hay transferencia disponible";
         }
         try {
+            // Comparar duplicados considerando todos los campos relevantes
+            boolean esDuplicada = transferencias.stream().anyMatch(t ->
+                t.getDate().equals(transferencia.getDate()) &&
+                t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
+                t.getCuit().equals(transferencia.getCuit()) &&
+                t.getAmount().equals(transferencia.getAmount()) &&
+                t.getBank().equals(transferencia.getBank())
+            );
+            if (esDuplicada) {
+                // Permitir guardar el Excel aunque sea duplicada, pero informar al usuario
+                String excelFilePath = ExportExcel.exportTransferToExcel(transferencia);
+                ExportExcel.saveExcelFile();
+                return "Advertencia: La transferencia ya ha sido procesada, pero el archivo Excel se guardó nuevamente en: " + excelFilePath;
+            }
             // Agregar la transferencia a la lista
             this.transferencias.add(transferencia);
-            // Generar el archivo Excel en memoria
-            ExportExcel.exportTransferToExcel(transferencia);
-            // Guardar el archivo Excel
-            return ExportExcel.saveExcelFile();
+            // Generar y guardar un archivo Excel único para cada transferencia
+            String excelFilePath = ExportExcel.exportTransferToExcel(transferencia);
+            ExportExcel.saveExcelFile();
+            return "Archivo Excel guardado exitosamente en: " + excelFilePath;
         } catch (IllegalArgumentException e) {
             return "Error de validación: " + e.getMessage();
         } catch (IOException e) {

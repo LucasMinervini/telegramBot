@@ -2,6 +2,7 @@ package com.bot.telegramdocreader.config;
 
 import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.service.DocumentProcessingService;
+import com.bot.telegramdocreader.service.TelegramFileService;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,8 +26,8 @@ public class TelegramBotConfig {
     }
 
     @Bean
-    public DocumentProcessingService documentProcessingService(TelegramDocBot telegramDocBot) {
-        return new DocumentProcessingService(telegramDocBot);
+    public DocumentProcessingService documentProcessingService(TelegramDocBot telegramDocBot, TelegramFileService telegramFileService) {
+        return new DocumentProcessingService(telegramDocBot, telegramFileService);
     }
 
     @Bean

@@ -21,6 +21,9 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+
 import javax.imageio.ImageIO;
 import org.apache.commons.lang3.StringUtils;
 
@@ -30,9 +33,12 @@ public class DocumentProcessingService {
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
     private TransferDTO lastTransfer; // Almacenar la última transferencia procesada
+    private List<TransferDTO> transferencias = new ArrayList<>(); // Lista para acumular transferencias
+    private TelegramFileService telegramFileService;
 
-    public DocumentProcessingService(TelegramDocBot bot) {
-        this.bot = bot;  
+    public DocumentProcessingService(TelegramDocBot bot, TelegramFileService telegramFileService) {
+        this.bot = bot;
+        this.telegramFileService = telegramFileService;
     }
 
     // Este método se encarga de procesar el documento recibido por el bot
@@ -65,9 +71,10 @@ public class DocumentProcessingService {
             
             // Mapper Transferencia 
             TransferDTO transferencia = mapearTransferencia(textoExtraido, isPdfFormat, doc);
-            this.lastTransfer = transferencia; // Guardar la transferencia
-
+            this.lastTransfer = transferencia;
             if (transferencia != null) {
+                // Agregar la transferencia a TelegramFileService para centralizar la acumulación
+                telegramFileService.createExcelFile(transferencia);
                 try {
                     String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                     if (excelResult.startsWith("Error")) {
@@ -845,6 +852,9 @@ public class DocumentProcessingService {
         }
         return fechaTexto;
     }
-    
 
+// Método para obtener todas las transferencias acumuladas
+public List<TransferDTO> getTransferencias() {
+    return transferencias;
+}
 }
