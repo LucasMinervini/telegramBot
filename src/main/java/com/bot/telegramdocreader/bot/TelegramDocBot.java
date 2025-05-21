@@ -1,5 +1,6 @@
 package com.bot.telegramdocreader.bot;
 
+import com.bot.telegramdocreader.dto.ClientsDTO;
 import com.bot.telegramdocreader.dto.TransferDTO;
 import com.bot.telegramdocreader.service.DocumentProcessingService;
 import com.bot.telegramdocreader.service.TelegramFileService;
@@ -15,10 +16,12 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
+import org.telegram.telegrambots.meta.api.objects.Message;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class TelegramDocBot extends TelegramLongPollingBot {
@@ -27,6 +30,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
     private String botToken;
     private DocumentProcessingService documentProcessingService;
     private TelegramFileService telegramFileService;
+    private java.util.Map<Long, ClientsDTO> mapClient = new java.util.concurrent.ConcurrentHashMap<>();
 
     // Constructor con inyección de dependencias
     public TelegramDocBot(@Value("${telegram.bot.token}") String botToken,
@@ -55,25 +59,48 @@ public class TelegramDocBot extends TelegramLongPollingBot {
         return botToken;
     }
 
-    
-    @Override
-    public void onUpdateReceived(Update update) {
-        if (update.hasMessage() && update.getMessage().hasDocument()) {
-            handleDocumentMessage(update);
-        } else if (update.hasCallbackQuery()) {
-            handleCallbackQuery(update);
+    // Método para enviar mensajes de texto a un chat específico
+    private void sendTextMessage(Long chatId, String text) {
+        SendMessage message = new SendMessage();
+        message.setChatId(chatId.toString());
+        message.setText(text);
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            e.printStackTrace();
         }
     }
+
+    @Override
+public void onUpdateReceived(Update update) {
+    if (update.hasMessage()) {
+        Message message = update.getMessage();
+        Long chatId = message.getChatId();
+
+        if (message.hasText() && message.getText().equals("/start")) {
+            ClientsDTO client = mapClient.computeIfAbsent(chatId, id ->
+            ClientsDTO.builder()
+            .chatId(id)
+            .name(message.getFrom().getFirstName()) 
+            .build()
+            );
+
+            sendTextMessage(chatId, "¡Hola " + client.getName() + "! 👋 Ya estás listo para enviar comprobantes. Mandame una imagen o PDF para procesar.");
+        } else if (message.hasDocument()) {
+            handleDocumentMessage(update); 
+        }
+    }
+}
 
     private void handleDocumentMessage(Update update) {
         Document doc = update.getMessage().getDocument();
         String botToken = getBotToken();
-        String chatId = update.getMessage().getChatId().toString();
+        Long chatId = update.getMessage().getChatId();
 
         try {
-            // Procesar el documento
-            String result = documentProcessingService.processDocument(doc, botToken);
-        
+            // Procesar el documento pasando el chatId correctamente
+            String result = documentProcessingService.processDocument(doc, botToken, chatId);
+
             // Crear botones inline
             InlineKeyboardMarkup markupInline = new InlineKeyboardMarkup();
             List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
@@ -99,7 +126,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
 
             // Enviar mensaje con los botones
             SendMessage response = new SendMessage();
-            response.setChatId(chatId);
+            response.setChatId(chatId.toString());
             response.setText(result);
             response.setReplyMarkup(markupInline);
             execute(response);
@@ -107,7 +134,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
         } catch (Exception e) {
             e.printStackTrace();
             try {
-                execute(new SendMessage(chatId, "Error al procesar el documento."));
+                execute(new SendMessage(chatId.toString(), "Error al procesar el documento."));
             } catch (TelegramApiException ex) {
                 ex.printStackTrace();
             }
@@ -166,4 +193,8 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             }
         }
     }
+    
+
+
+
 }

@@ -13,6 +13,7 @@ import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
 import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
+import com.bot.telegramdocreader.dto.ClientsDTO;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -23,11 +24,11 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-
-
+import java.util.Map;
 
 import javax.imageio.ImageIO;
 import org.apache.commons.lang3.StringUtils;
+import org.telegram.telegrambots.meta.api.objects.Message;
 
 @Service
 public class DocumentProcessingService {
@@ -37,6 +38,7 @@ public class DocumentProcessingService {
     private TransferDTO lastTransfer; // Almacenar la última transferencia procesada
     private List<TransferDTO> transferencias = new ArrayList<>(); // Lista para acumular transferencias
     private TelegramFileService telegramFileService;
+    private Map<Long, ClientsDTO> mapClient = new java.util.concurrent.ConcurrentHashMap<>();
 
     public DocumentProcessingService(TelegramDocBot bot, TelegramFileService telegramFileService) {
         this.bot = bot;
@@ -44,27 +46,23 @@ public class DocumentProcessingService {
     }
 
     // Este método se encarga de procesar el documento recibido por el bot
-    public String processDocument(Document doc, String botToken) throws Exception {
+    public String processDocument(Document doc, String botToken, Long chatId) throws Exception {
         String textoExtraido;
-        boolean isPdfFormat = isPdf(doc); // Verificamos si es un PDF antes de procesar
-        
+        boolean isPdfFormat = isPdf(doc);
         try {
+            ClientsDTO client = mapClient.computeIfAbsent(chatId, id -> ClientsDTO.builder().chatId(id).build());
             if (isImage(doc)) {
                 File file = getFileFromTelegram(doc.getFileId(), botToken);
                 URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
                 InputStream inputStream = fileUrl.openStream();
                 BufferedImage image = ImageIO.read(inputStream);
-        
                 ITesseract instance = new Tesseract();
                 instance.setDatapath("C:\\Program Files\\Tesseract-OCR\\tessdata");
                 instance.setLanguage("spa");
                 instance.setPageSegMode(1);
                 instance.setOcrEngineMode(1);
-        
                 textoExtraido = instance.doOCR(image);
-                // Nuevo flujo: procesar el texto OCR con processOcrText
-                TransferDTO transferencia = mapearTransferencia(textoExtraido, false, doc);
-                this.lastTransfer = transferencia;
+                TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
                 if (transferencia != null) {
                     telegramFileService.createExcelFile(transferencia);
                     try {
@@ -109,12 +107,9 @@ public class DocumentProcessingService {
             } else {
                 return "Formato de archivo no soportado.";
             }
-            
-            // Mapper Transferencia 
-            TransferDTO transferencia = mapearTransferencia(textoExtraido, isPdfFormat, doc);
-            this.lastTransfer = transferencia;
+            TransferDTO transferencia = mapperTransf(textoExtraido, isPdfFormat, doc);
             if (transferencia != null) {
-                // Agregar la transferencia a TelegramFileService para centralizar la acumulación
+                
                 telegramFileService.createExcelFile(transferencia);
                 try {
                     String excelResult = ExportExcel.exportTransferToExcel(transferencia);
@@ -122,7 +117,6 @@ public class DocumentProcessingService {
                         System.out.println("Error al generar el archivo Excel: " + excelResult);
                         return "Error al generar el archivo Excel: " + excelResult;
                     }
-                    // Retornar los detalles de la transferencia según el tipo de banco
                     if (transferencia.getBank().equalsIgnoreCase("PREX")) {
                         String formatoPrex = "Fecha: %s \n" +
                                 "Tipo de Operación: %s\n" +
@@ -263,7 +257,7 @@ public class DocumentProcessingService {
         return this.lastTransfer;
     }
 
-    private TransferDTO mapearTransferencia(String textoExtraido, boolean isPdfFormat, Document doc) {
+    private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Detectar si es transferencia de Brubank por texto o por nombre de archivo
         String fileNameLower = doc.getFileName().toLowerCase();
         boolean esBrubank = textoExtraido.toLowerCase().contains("brubank") || fileNameLower.contains("brubank");
@@ -1013,5 +1007,30 @@ public class DocumentProcessingService {
 // Método para obtener todas las transferencias acumuladas
 public List<TransferDTO> getTransferencias() {
     return transferencias;
+}
+
+public void handleDocumentMessage(Message message) {
+    Long chatId = message.getChatId();
+    if (message.hasDocument()) {
+        org.telegram.telegrambots.meta.api.objects.Document document = message.getDocument();
+        String botToken = bot.getBotToken();
+        try {
+            String resultado = processDocument(document, botToken, chatId);
+            bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), resultado));
+        } catch (Exception e) {
+            e.printStackTrace();
+            try {
+                bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "Error al procesar el documento: " + e.getMessage()));
+            } catch (org.telegram.telegrambots.meta.exceptions.TelegramApiException ex) {
+                ex.printStackTrace();
+            }
+        }
+    } else {
+        try {
+            bot.execute(new org.telegram.telegrambots.meta.api.methods.send.SendMessage(chatId.toString(), "No se recibió ningún documento."));
+        } catch (org.telegram.telegrambots.meta.exceptions.TelegramApiException ex) {
+            ex.printStackTrace();
+        }
+    }
 }
 }
