@@ -29,8 +29,8 @@ public class ExportExcel {
         }
     }
 
-    public static String exportTransferToExcel(TransferDTO transferencia) throws IOException {
-        if (transferencia == null) {
+    public static String exportTransferToExcel(TransferDTO transfer) throws IOException {
+        if (transfer == null) {
             throw new IllegalArgumentException("La transferencia no puede ser nula");
         }
 
@@ -73,24 +73,24 @@ public class ExportExcel {
         // Fila de datos (ejemplo, puedes adaptar los campos según TransferDTO)
         Row dataRow = sheet.createRow(1);
         Cell dateCell = dataRow.createCell(0);
-        dateCell.setCellValue(transferencia.getDate());
+        dateCell.setCellValue(transfer.getDate());
         dateCell.setCellStyle(dataStyle);
 
 
         Cell typeCell = dataRow.createCell(1);
-        typeCell.setCellValue(transferencia.getTypeOFTransfer());
+        typeCell.setCellValue(transfer.getTypeOFTransfer());
         typeCell.setCellStyle(dataStyle);
 
         Cell cuitCell = dataRow.createCell(2);
-        cuitCell.setCellValue(transferencia.getCuit());
+        cuitCell.setCellValue(transfer.getCuit());
         cuitCell.setCellStyle(dataStyle);
 
         Cell amountCell = dataRow.createCell(3);
-        amountCell.setCellValue(transferencia.getAmount());
+        amountCell.setCellValue(transfer.getAmount());
         amountCell.setCellStyle(dataStyle);
 
         Cell bankCell = dataRow.createCell(4);
-        bankCell.setCellValue(transferencia.getBank());
+        bankCell.setCellValue(transfer.getBank());
         bankCell.setCellStyle(dataStyle);
 
         // Ajustar ancho de columnas
