@@ -22,8 +22,8 @@ public class Brubank {
         String monto = "";
         String bancoReceptor = "";
         String fileNameLower = doc.getFileName().toLowerCase();
-        boolean esBrubank = textoExtraido.toLowerCase().contains("brubank") || fileNameLower.contains("brubank");
-        if (esBrubank) {
+        boolean isBrubank = textoExtraido.toLowerCase().contains("brubank") || fileNameLower.contains("brubank");
+        if (isBrubank) {
             for (String line : lines) {
                 line = line.trim();
                 String lower = line.toLowerCase();
