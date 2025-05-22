@@ -64,6 +64,7 @@ public class DocumentProcessingService {
                 textoExtraido = instance.doOCR(image);
                 TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
                 if (transferencia != null) {
+                    lastTransfer = transferencia;
                     telegramFileService.createExcelFile(transferencia);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
@@ -109,6 +110,7 @@ public class DocumentProcessingService {
             }
             TransferDTO transferencia = mapperTransf(textoExtraido, isPdfFormat, doc);
             if (transferencia != null) {
+                lastTransfer = transferencia;
                 
                 telegramFileService.createExcelFile(transferencia);
                 try {

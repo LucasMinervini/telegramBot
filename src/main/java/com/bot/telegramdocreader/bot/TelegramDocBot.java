@@ -89,6 +89,8 @@ public void onUpdateReceived(Update update) {
         } else if (message.hasDocument()) {
             handleDocumentMessage(update); 
         }
+    } else if (update.hasCallbackQuery()) {
+        handleCallbackQuery(update);
     }
 }
 
