@@ -14,6 +14,8 @@ import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
 import com.bot.telegramdocreader.dto.ClientsDTO;
+import com.bot.telegramdocreader.service.banks.Prex;
+import com.bot.telegramdocreader.service.banks.Brubank;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -264,71 +266,7 @@ public class DocumentProcessingService {
         String fileNameLower = doc.getFileName().toLowerCase();
         boolean esBrubank = textoExtraido.toLowerCase().contains("brubank") || fileNameLower.contains("brubank");
         if (esBrubank) {
-            TransferDTO transferencia =  TransferDTO.builder().build();
-            // Procesar líneas individualmente para extraer cada campo
-            String[] lines = textoExtraido.split("\\r?\\n");
-            String fecha = "";
-            String tipoOperacion = "";
-            String cuit = "";
-            String monto = "";
-            String bancoReceptor = "";
-            for (String line : lines) {
-                line = line.trim();
-                String lower = line.toLowerCase();
-                // Fecha: buscar variantes y formatos
-                if (lower.startsWith("fecha:")) {
-                    fecha = line.replaceFirst("(?i)fecha:", "").trim();
-                } else if (fecha.isEmpty() && lower.matches(".*\\d{2}/\\d{2}/\\d{4}.*")) {
-                    // Buscar fechas tipo 12/05/2024
-                    fecha = line.replaceAll(".*?(\\d{2}/\\d{2}/\\d{4}).*", "$1").trim();
-                } else if (fecha.isEmpty() && lower.matches(".*\\d{2}-\\d{2}-\\d{4}.*")) {
-                    // Buscar fechas tipo 12-05-2024
-                    fecha = line.replaceAll(".*?(\\d{2}-\\d{2}-\\d{4}).*", "$1").trim();
-                } else if (fecha.isEmpty() && lower.matches(".*\\d{4}/\\d{2}/\\d{2}.*")) {
-                    // Buscar fechas tipo 2024/05/12
-                    fecha = line.replaceAll(".*?(\\d{4}/\\d{2}/\\d{2}).*", "$1").trim();
-                }
-                // Tipo de operación: buscar variantes
-                if (lower.startsWith("tipo de operación:") || lower.startsWith("tipo de operacion:")) {
-                    tipoOperacion = line.replaceFirst("(?i)tipo de operaci[oó]n:", "").trim();
-                } else if (tipoOperacion.isEmpty() && (lower.contains("transferencia") || lower.contains("envío de dinero") || lower.contains("envio de dinero"))) {
-                    tipoOperacion = "Transferencia";
-                }
-                // CUIT/CUIL: buscar variantes y sin etiqueta
-                if (lower.startsWith("cuit/cuil:") || lower.startsWith("cuit:") || lower.startsWith("cuil:")) {
-                    cuit = line.replaceAll("(?i)cuit/cuil:|cuit:|cuil:", "").replaceAll("[^0-9]", "").trim();
-                } else if (cuit.isEmpty() && line.replaceAll("[^0-9]", "").length() == 11) {
-                    cuit = line.replaceAll("[^0-9]", "").trim();
-                }
-                // Monto: buscar variantes y sin etiqueta
-                if (lower.startsWith("monto bruto:")) {
-                    monto = line.replaceFirst("(?i)monto bruto:", "").replace("$", "").replace(" ", "").trim();
-                } else if (monto.isEmpty() && lower.contains("$")) {
-                    monto = line.replaceAll("[^0-9.,]", "").trim();
-                }
-                // Banco receptor: buscar variantes y patrones
-                if (lower.startsWith("banco receptor:")) {
-                    bancoReceptor = line.replaceFirst("(?i)banco receptor:", "").trim();
-                } else if (bancoReceptor.isEmpty() && (lower.contains("capital") || lower.contains("cocos") || lower.contains("banco") || lower.contains("capital sa"))) {
-                    bancoReceptor = line.replaceAll("(?i)banco receptor:|banco|receptor|:|\u00a0", "").trim();
-                } else if (bancoReceptor.isEmpty() && lower.contains("origen caja de ahorro")) {
-                    bancoReceptor = "BRUBANK";
-                }
-            }
-            // Si no se encontró banco receptor explícito, dejar como BRUBANK solo si no hay otro nombre
-            if (bancoReceptor.isEmpty()) {
-                bancoReceptor = "BRUBANK";
-            }
-            // Formatear CUIT si es posible
-            if (cuit.length() == 11) {
-                cuit = cuit.substring(0,2) + "-" + cuit.substring(2,10) + "-" + cuit.substring(10);
-            }
-            transferencia.setDate(fecha);
-            transferencia.setTypeOFTransfer(!tipoOperacion.isEmpty() ? tipoOperacion : "Transferencia");
-            transferencia.setCuit(cuit);
-            transferencia.setAmount(monto);
-            transferencia.setBank(bancoReceptor);
-            return transferencia;
+            return Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
         textoExtraido = textoExtraido.replaceAll("[^\\p{Print}\\s]", "").trim();
         String[] lines = textoExtraido.split("\\r?\\n");
@@ -366,66 +304,8 @@ public class DocumentProcessingService {
         }
         // Unificación lógica PREX para ambos formatos
         if (isPrex) {
-            tipoOperacion = "Transferencia";
-            for (String line : lines) {
-                String lineaLower = line.toLowerCase().trim();
-                String lineaOriginal = line.trim();
-                // Extraer monto
-                if (lineaLower.contains("enviaste:") || lineaLower.contains("enviaste $") || (lineaLower.contains("$") && monto.isEmpty())) {
-                    String montoTemp = lineaOriginal.replaceAll("[^0-9.,]", "").trim();
-                    if (!montoTemp.isEmpty()) {
-                        monto = montoTemp;
-                    }
-                }
-                // Extraer fecha
-                if ((lineaLower.contains("de") && lineaLower.contains("hs") && fecha.isEmpty()) || (lineaLower.matches(".*\\d+.*de.*202\\d.*") && fecha.isEmpty())) {
-                    fecha = lineaOriginal;
-                }
-                // Extraer destinatario
-                if (lineaLower.contains("enviaste a:") || lineaLower.contains("destinatario:")) {
-                    destinatario = lineaOriginal.replaceAll("(?i)Enviaste a:|Destinatario:", "").trim();
-                    if (cuentaDestino.isEmpty()) {
-                        cuentaDestino = destinatario;
-                    }
-                }
-                // Extraer SOLO el primer CUIT/CUIL que aparezca después de una referencia clara al emisor
-                if (!cuitEmisorEncontrado && (lineaLower.contains("cuit emisor") || lineaLower.contains("cuil emisor") || lineaLower.contains("cuit del emisor") || lineaLower.contains("cuil del emisor") || lineaLower.contains("cuit/cuil emisor") || lineaLower.contains("cuit/cuil del emisor"))) {
-                    String posibleCuit = lineaOriginal.replaceAll("[^0-9]", "");
-                    if (posibleCuit.length() == 11) {
-                        cuitSender = posibleCuit.substring(0,2) + "-" + posibleCuit.substring(2,10) + "-" + posibleCuit.substring(10);
-                        cuitEmisorEncontrado = true;
-                    }
-                } else if (!cuitEmisorEncontrado && (lineaLower.matches(".*cu[il]t.*:.*") || lineaLower.contains("cuit:") || lineaLower.contains("cuil:"))) {
-                    // Si no hay referencia explícita al emisor, tomar solo el primer CUIT/CUIL que aparezca en el documento
-                    String posibleCuit = lineaOriginal.replaceAll("[^0-9]", "");
-                    if (posibleCuit.length() == 11) {
-                        cuitSender = posibleCuit.substring(0,2) + "-" + posibleCuit.substring(2,10) + "-" + posibleCuit.substring(10);
-                        cuitEmisorEncontrado = true;
-                    }
-                }
-                // Extraer CBU/CVU
-                if (lineaLower.matches(".*c[bv]u.*:.*") || lineaLower.contains("destino:")) {
-                    cbuDestino = lineaOriginal.replaceAll("(?i)CVU/CBU:|CVU destino:|CBU destino:|Destino:", "").trim();
-                }
-                // Extraer cuenta destino
-                if (lineaLower.contains("cuenta") && lineaLower.contains("destino")) {
-                    cuentaDestino = lineaOriginal.replaceAll("(?i)Cuenta destino:?|Cuenta:", "").trim();
-                }
-            }
-            if (!monto.isEmpty() && (!destinatario.isEmpty() || !cuitSender.isEmpty())) {
-                return TransferDTO.builder()
-                    .name(destinatario)
-                    .date(fecha)
-                    .typeOFTransfer(tipoOperacion)
-                    .cuit(cuitSender)
-                    .amount(monto)
-                    .bank(bankReceiver)
-                    .cbuDestino(cbuDestino)
-                    .cuentaDestino(cuentaDestino)
-                    .build();
-            }
+            return Prex.parsePrexTransfer(textoExtraido, doc);
         }
-
         // Si no es PREX, buscar el tipo de operación en todo el texto
         String textoCompleto = String.join(" ", lines).toLowerCase();
         if (tipoOperacion.isEmpty()) {
