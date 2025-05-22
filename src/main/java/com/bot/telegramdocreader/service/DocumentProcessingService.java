@@ -74,6 +74,8 @@ public class DocumentProcessingService {
                             System.out.println("Error al generar el archivo Excel: " + excelResult);
                             return "Error al generar el archivo Excel: " + excelResult;
                         }
+                        // Formatear CUIT del emisor o mostrar mensaje si no hay
+                        String cuitEmisor = (transferencia.getCuit() != null && !transferencia.getCuit().trim().isEmpty()) ? transferencia.getCuit() : "No hay CUIT del emisor";
                         if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("PREX")) {
                             String formatoPrex = "Fecha: %s \n" +
                                     "Tipo de Operación: %s\n" +
@@ -91,7 +93,7 @@ public class DocumentProcessingService {
                             return String.format(formatoBase,
                                 transferencia.getDate(),
                                 transferencia.getTypeOFTransfer(),
-                                transferencia.getCuit(),
+                                cuitEmisor,
                                 transferencia.getAmount(),
                                 transferencia.getBank());
                         }
@@ -113,7 +115,6 @@ public class DocumentProcessingService {
             TransferDTO transferencia = mapperTransf(textoExtraido, isPdfFormat, doc);
             if (transferencia != null) {
                 lastTransfer = transferencia;
-                
                 telegramFileService.createExcelFile(transferencia);
                 try {
                     String excelResult = ExportExcel.exportTransferToExcel(transferencia);
@@ -121,6 +122,8 @@ public class DocumentProcessingService {
                         System.out.println("Error al generar el archivo Excel: " + excelResult);
                         return "Error al generar el archivo Excel: " + excelResult;
                     }
+                    // Formatear CUIT del emisor o mostrar mensaje si no hay
+                    String cuitEmisor = (transferencia.getCuit() != null && !transferencia.getCuit().trim().isEmpty()) ? transferencia.getCuit() : "No hay CUIT del emisor";
                     if (transferencia.getBank().equalsIgnoreCase("PREX")) {
                         String formatoPrex = "Fecha: %s \n" +
                                 "Tipo de Operación: %s\n" +
@@ -138,7 +141,7 @@ public class DocumentProcessingService {
                         return String.format(formatoBase,
                             transferencia.getDate(),
                             transferencia.getTypeOFTransfer(),
-                            transferencia.getCuit(),
+                            cuitEmisor,
                             transferencia.getAmount(),
                             transferencia.getBank());
                     }
