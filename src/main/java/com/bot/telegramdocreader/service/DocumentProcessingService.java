@@ -27,6 +27,8 @@ import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 import org.apache.commons.lang3.StringUtils;
@@ -115,6 +117,9 @@ public class DocumentProcessingService {
             TransferDTO transferencia = mapperTransf(textoExtraido, isPdfFormat, doc);
             if (transferencia != null) {
                 lastTransfer = transferencia;
+                // Extraer y asignar CUIT del emisor
+                String cuitEmisor = extraerCuitEmisor(textoExtraido);
+                transferencia.setCuit(cuitEmisor);
                 telegramFileService.createExcelFile(transferencia);
                 try {
                     String excelResult = ExportExcel.exportTransferToExcel(transferencia);
@@ -123,7 +128,6 @@ public class DocumentProcessingService {
                         return "Error al generar el archivo Excel: " + excelResult;
                     }
                     // Formatear CUIT del emisor o mostrar mensaje si no hay
-                    String cuitEmisor = (transferencia.getCuit() != null && !transferencia.getCuit().trim().isEmpty()) ? transferencia.getCuit() : "No hay CUIT del emisor";
                     if (transferencia.getBank().equalsIgnoreCase("PREX")) {
                         String formatoPrex = "Fecha: %s \n" +
                                 "Tipo de Operación: %s\n" +
@@ -491,10 +495,10 @@ public class DocumentProcessingService {
                 if (lower.startsWith("$") || lower.contains("importe") || lower.contains("monto")) {
                     monto = original.replaceAll("(?i)importe:|monto:|\\$", "").trim();
                 }
-                if (( lower.contains("cuit emisor") || lower.contains("cuil emisor") || 
-                    (lower.contains("cuit") && (lower.contains("de:") || 
-                    lower.contains("origen") || lower.contains("emisor"))) || 
-                    lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*"))) {
+                // CUIT/CUIL - Solo buscar el del emisor
+                if ((lower.contains("cuit emisor") || lower.contains("cuil emisor") ||
+                    (lower.contains("cuit") && (lower.contains("de:") || lower.contains("origen") || lower.contains("emisor"))) ||
+                    (lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*") && (lower.contains("emisor") || lower.contains("origen"))))) {
                     java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\d{2}-\\d{8}-\\d{1}");
                     java.util.regex.Matcher matcher = pattern.matcher(original);
                     if (matcher.find()) {
@@ -525,7 +529,7 @@ public class DocumentProcessingService {
         // Validar que al menos tengamos algunos datos básicos
         if (!destinatario.isEmpty() || !cuitSender.isEmpty()) {
             TransferDTO transferencia = TransferDTO.builder()
-                .name(destinatario)
+                .name("") // No mostrar destinatario
                 .date(fecha)
                 .typeOFTransfer(tipoOperacion)
                 .cuit(cuitSender)
@@ -660,4 +664,21 @@ public void handleDocumentMessage(Message message) {
         }
     }
 }
+private String extraerCuitEmisor(String texto) {
+    
+    Pattern pattern = Pattern.compile("(?i)(?:cuit(?:\\s*del\\s*emisor)?[:\\s]*)?([0-9]{2}-?[0-9]{8}-?[0-9])");
+    Matcher matcher = pattern.matcher(texto);
+    while (matcher.find()) {
+        String cuit = matcher.group(1);
+        if (cuit != null && !cuit.isEmpty()) {
+            String digits = cuit.replaceAll("[^0-9]", "");
+            if (digits.length() == 11) {
+                return digits.substring(0,2) + "-" + digits.substring(2,10) + "-" + digits.substring(10);
+            }
+        }
+    }
+    return null;
+}
+
+
 }
