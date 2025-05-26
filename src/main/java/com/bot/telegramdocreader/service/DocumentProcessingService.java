@@ -218,9 +218,24 @@ public class DocumentProcessingService {
             String text = stripper.getText(document).trim();
             
             if (text.isEmpty()) {
-                throw new IOException("No se pudo extraer texto del PDF. El documento podría estar vacío o tener un formato no compatible.");
+                // Intentar OCR sobre la primera página si no hay texto extraído
+                try {
+                    org.apache.pdfbox.rendering.PDFRenderer pdfRenderer = new org.apache.pdfbox.rendering.PDFRenderer(document);
+                    java.awt.image.BufferedImage bim = pdfRenderer.renderImageWithDPI(0, 300);
+                    java.io.File tempImage = java.io.File.createTempFile("pdf_page_ocr", ".png");
+                    javax.imageio.ImageIO.write(bim, "png", tempImage);
+                    try {
+                        text = com.bot.telegramdocreader.utils.ImageProcessor.extractTextFromImage(tempImage).trim();
+                    } finally {
+                        tempImage.delete();
+                    }
+                    if (text.isEmpty()) {
+                        throw new IOException("No se pudo extraer texto del PDF ni mediante OCR. El documento podría estar vacío o tener un formato no compatible.");
+                    }
+                } catch (Exception ocrEx) {
+                    throw new IOException("No se pudo extraer texto del PDF ni mediante OCR. El documento podría estar vacío o tener un formato no compatible.", ocrEx);
+                }
             }
-            
             
             return text;
     
