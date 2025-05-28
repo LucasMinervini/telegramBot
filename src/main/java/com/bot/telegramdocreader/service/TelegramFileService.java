@@ -125,8 +125,8 @@ public class TelegramFileService {
                 Cell cuitCell = row.createCell(2);
                 Cell bankCell = row.createCell(4);
                 if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("PREX")) {
-                    cuitCell.setCellValue(transferencia.getCbuDestino() != null ? transferencia.getCbuDestino() : "");
-                    bankCell.setCellValue(transferencia.getCuentaDestino() != null ? transferencia.getCuentaDestino() : "");
+                    cuitCell.setCellValue(transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "");
+                    bankCell.setCellValue(transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
                 } else {
                     cuitCell.setCellValue(transferencia.getCuit());
                     bankCell.setCellValue(transferencia.getBank());

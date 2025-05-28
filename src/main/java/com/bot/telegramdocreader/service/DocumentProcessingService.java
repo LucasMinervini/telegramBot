@@ -13,8 +13,8 @@ import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 
 import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
-import com.bot.telegramdocreader.dto.ClientsDTO;
 import com.bot.telegramdocreader.service.banks.Prex;
+import com.bot.telegramdocreader.service.banks.Uala;
 import com.bot.telegramdocreader.service.banks.Brubank;
 
 import net.sourceforge.tess4j.ITesseract;
@@ -26,7 +26,7 @@ import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,7 +42,7 @@ public class DocumentProcessingService {
     private TransferDTO lastTransfer; // Almacenar la última transferencia procesada
     private List<TransferDTO> transferencias = new ArrayList<>(); // Lista para acumular transferencias
     private TelegramFileService telegramFileService;
-    private Map<Long, ClientsDTO> mapClient = new java.util.concurrent.ConcurrentHashMap<>();
+    
 
     public DocumentProcessingService(TelegramDocBot bot, TelegramFileService telegramFileService) {
         this.bot = bot;
@@ -54,7 +54,7 @@ public class DocumentProcessingService {
         String textoExtraido;
         boolean isPdfFormat = isPdf(doc);
         try {
-            ClientsDTO client = mapClient.computeIfAbsent(chatId, id -> ClientsDTO.builder().chatId(id).build());
+            
             if (isImage(doc)) {
                 File file = getFileFromTelegram(doc.getFileId(), botToken);
                 URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
@@ -79,20 +79,12 @@ public class DocumentProcessingService {
                         // Formatear CUIT del emisor o mostrar mensaje si no hay
                         String cuitEmisor = (transferencia.getCuit() != null && !transferencia.getCuit().trim().isEmpty()) ? transferencia.getCuit() : "No hay CUIT del emisor";
                         if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("PREX")) {
-                            String formatoPrex = "Fecha: %s \n" +
-                                    "Tipo de Operación: %s\n" +
-                                    "Monto Bruto: $ %s\n" +
-                                    "CBU/CVU Destino: %s\n" +
-                                    "Cuenta Destino: %s";
-                            return String.format(formatoPrex,
-                                    transferencia.getDate() != null ? transferencia.getDate() : "",
-                                    transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
-                                    transferencia.getAmount() != null ? transferencia.getAmount() : "",
-                                    transferencia.getCbuDestino() != null ? transferencia.getCbuDestino() : "",
-                                    transferencia.getCuentaDestino() != null ? transferencia.getCuentaDestino() : "");
+                            return Prex.formatPrex(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("UALA")) {
+                            return Uala.formatUala(transferencia);
                         } else {
-                            String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
-                            return String.format(formatoBase,
+                            String formatBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
+                            return String.format(formatBase,
                                 transferencia.getDate(),
                                 transferencia.getTypeOFTransfer(),
                                 cuitEmisor,
@@ -118,7 +110,7 @@ public class DocumentProcessingService {
             if (transferencia != null) {
                 lastTransfer = transferencia;
                 // Extraer y asignar CUIT del emisor
-                String cuitEmisor = extraerCuitEmisor(textoExtraido);
+                String cuitEmisor = extractCuitSender(textoExtraido);
                 transferencia.setCuit(cuitEmisor);
                 telegramFileService.createExcelFile(transferencia);
                 try {
@@ -138,8 +130,8 @@ public class DocumentProcessingService {
                                 transferencia.getDate() != null ? transferencia.getDate() : "",
                                 transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
                                 transferencia.getAmount() != null ? transferencia.getAmount() : "",
-                                transferencia.getCbuDestino() != null ? transferencia.getCbuDestino() : "",
-                                transferencia.getCuentaDestino() != null ? transferencia.getCuentaDestino() : "");
+                                transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "",
+                                transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
                     } else {
                         String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                         return String.format(formatoBase,
@@ -174,7 +166,10 @@ public class DocumentProcessingService {
         boolean isImageByExtension = fileName.endsWith(".jpg") || 
                                    fileName.endsWith(".jpeg") || 
                                    fileName.endsWith(".png") || 
-                                   fileName.endsWith(".heic"); 
+                                   fileName.endsWith(".heic") || 
+                                   fileName.endsWith(".gif") || 
+                                   fileName.endsWith(".bmp") ||
+                                   fileName.endsWith(".tiff"); 
         
         // Verificar por tipo MIME
         boolean isImageByMimeType = mimeType.startsWith("image/");
@@ -218,7 +213,7 @@ public class DocumentProcessingService {
             String text = stripper.getText(document).trim();
             
             if (text.isEmpty()) {
-                // Intentar OCR sobre la primera página si no hay texto extraído
+                
                 try {
                     org.apache.pdfbox.rendering.PDFRenderer pdfRenderer = new org.apache.pdfbox.rendering.PDFRenderer(document);
                     java.awt.image.BufferedImage bim = pdfRenderer.renderImageWithDPI(0, 300);
@@ -293,12 +288,25 @@ public class DocumentProcessingService {
         // Detectar si es transferencia de PREX
         boolean isPrex = false;
         String[] lines = textoExtraido.split("\r?\n");
+        // Detectar si es transferencia de Ualá
+        boolean isUala = false;
         for (int i = 0; i < Math.min(5, lines.length); i++) {
-            String lineaNormalizada = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
-            if (lineaNormalizada.contains("prex") || containsApproxWord(lineaNormalizada, "prex", 1)) {
-                isPrex = true;
+            String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
+            if (lineNormalize.contains("uala") || containsApproxWord(lineNormalize, "uala", 1) || containsApproxWord(lineNormalize, "ualá", 1)) {
+                isUala = true;
                 break;
             }
+        }
+        if (!isUala) {
+            if (fileNameLower.contains("uala")) {
+                isUala = true;
+            }
+        }
+        if(textoExtraido.matches("(?i).*\\buala\\b.*")) {
+            isUala = true;
+        }
+        if (isUala) {
+            return Uala.parseUalaTransfer(textoExtraido, doc);
         }
         if (!isPrex) {
             if (fileNameLower.contains("prex")) {
@@ -321,10 +329,7 @@ public class DocumentProcessingService {
         String monto = "";
         String bankReceiver = "";
         String tipoOperacion = "";
-        String cbuDestino = "";
-        String cuentaDestino = "";
-        boolean cuitEmisorEncontrado = false;
-        
+       
         
         String textoCompleto = String.join(" ", lines).toLowerCase();
         if (tipoOperacion.isEmpty()) {
@@ -679,7 +684,7 @@ public void handleDocumentMessage(Message message) {
         }
     }
 }
-private String extraerCuitEmisor(String texto) {
+private String extractCuitSender(String texto) {
     
     Pattern pattern = Pattern.compile("(?i)(?:cuit(?:\\s*del\\s*emisor)?[:\\s]*)?([0-9]{2}-?[0-9]{8}-?[0-9])");
     Matcher matcher = pattern.matcher(texto);
