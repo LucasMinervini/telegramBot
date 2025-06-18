@@ -15,6 +15,7 @@ import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
 import com.bot.telegramdocreader.service.banks.Prex;
 import com.bot.telegramdocreader.service.banks.Uala;
+import com.bot.telegramdocreader.service.banks.BancoProvincia;
 import com.bot.telegramdocreader.service.banks.Brubank;
 
 import net.sourceforge.tess4j.ITesseract;
@@ -66,7 +67,43 @@ public class DocumentProcessingService {
                 instance.setPageSegMode(1);
                 instance.setOcrEngineMode(1);
                 textoExtraido = instance.doOCR(image);
+                // --- INICIO LOG UALA ---
+                boolean isUala = false;
+                String[] lines = textoExtraido.split("\r?\n");
+                for (int i = 0; i < Math.min(5, lines.length); i++) {
+                    String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
+                    if (lineNormalize.contains("uala") || containsApproxWord(lineNormalize, "uala", 1) || containsApproxWord(lineNormalize, "ualá", 1)) {
+                        isUala = true;
+                        break;
+                    }
+                }
+                if (!isUala) {
+                    String fileNameLower = doc.getFileName().toLowerCase();
+                    if (fileNameLower.contains("uala")) {
+                        isUala = true;
+                    }
+                }
+                if(textoExtraido.matches("(?i).*\\buala\\b.*")) {
+                    isUala = true;
+                }
                 TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
+                if (isUala && transferencia != null) {
+                    lastTransfer = transferencia;
+                    telegramFileService.createExcelFile(transferencia);
+                    try {
+                        String excelResult = ExportExcel.exportTransferToExcel(transferencia);
+                        if (excelResult.startsWith("Error")) {
+                            System.out.println("Error al generar el archivo Excel: " + excelResult);
+                            return "Error al generar el archivo Excel: " + excelResult;
+                        }
+                        // Siempre usar el formato de Ualá
+                        return Uala.formatUala(transferencia);
+                    } catch (IOException e) {
+                        System.out.println("Error al generar el archivo Excel: " + e.getMessage());
+                        return "Error al generar el archivo Excel: " + e.getMessage();
+                    }
+                }
+               
                 if (transferencia != null) {
                     lastTransfer = transferencia;
                     telegramFileService.createExcelFile(transferencia);
@@ -100,6 +137,7 @@ public class DocumentProcessingService {
                 }
             } else if (isPdf(doc)) {
                 textoExtraido = extractTextFromPdf(doc, botToken);
+                System.out.println("[DEBUG] Texto extraído del PDF: " + textoExtraido); 
                 if (textoExtraido.startsWith("Error") || textoExtraido.contains("protegido con contraseña")) {
                     return textoExtraido;
                 }
@@ -121,17 +159,7 @@ public class DocumentProcessingService {
                     }
                     // Formatear CUIT del emisor o mostrar mensaje si no hay
                     if (transferencia.getBank().equalsIgnoreCase("PREX")) {
-                        String formatoPrex = "Fecha: %s \n" +
-                                "Tipo de Operación: %s\n" +
-                                "Monto Bruto: $ %s\n" +
-                                "CBU/CVU Destino: %s\n" +
-                                "Cuenta Destino: %s";
-                        return String.format(formatoPrex,
-                                transferencia.getDate() != null ? transferencia.getDate() : "",
-                                transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
-                                transferencia.getAmount() != null ? transferencia.getAmount() : "",
-                                transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "",
-                                transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
+                            return Prex.formatPrex(transferencia);
                     } else {
                         String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                         return String.format(formatoBase,
@@ -191,49 +219,41 @@ public class DocumentProcessingService {
 
     // Método para extraer texto de un archivo PDF 
     private String extractTextFromPdf(Document doc, String botToken) {
-        // Obtener el archivo desde Telegram
         File file = null;
         InputStream inputStream = null;
         PDDocument document = null;
         try {
             file = getFileFromTelegram(doc.getFileId(), botToken);
             URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
-            
             inputStream = fileUrl.openStream();
-            
-            // Intentar cargar el documento con una contraseña vacía
             document = PDDocument.load(inputStream, "");
-    
-            // Configuración para permitir la extracción de texto
             if (document.isEncrypted()) {
                 document.setAllSecurityToBeRemoved(true);
             }
-    
             PDFTextStripper stripper = new PDFTextStripper();
             String text = stripper.getText(document).trim();
-            
-            if (text.isEmpty()) {
-                
-                try {
-                    org.apache.pdfbox.rendering.PDFRenderer pdfRenderer = new org.apache.pdfbox.rendering.PDFRenderer(document);
-                    java.awt.image.BufferedImage bim = pdfRenderer.renderImageWithDPI(0, 300);
-                    java.io.File tempImage = java.io.File.createTempFile("pdf_page_ocr", ".png");
+            // Si el texto extraído es vacío o muy corto, intentar OCR en todas las páginas
+            if (text.isEmpty() || text.length() < 30) {
+                StringBuilder ocrText = new StringBuilder();
+                org.apache.pdfbox.rendering.PDFRenderer pdfRenderer = new org.apache.pdfbox.rendering.PDFRenderer(document);
+                int pageCount = document.getNumberOfPages();
+                for (int page = 0; page < pageCount; page++) {
+                    java.awt.image.BufferedImage bim = pdfRenderer.renderImageWithDPI(page, 300);
+                    java.io.File tempImage = java.io.File.createTempFile("pdf_page_ocr_" + page, ".png");
                     javax.imageio.ImageIO.write(bim, "png", tempImage);
                     try {
-                        text = com.bot.telegramdocreader.utils.ImageProcessor.extractTextFromImage(tempImage).trim();
+                        String pageOcr = com.bot.telegramdocreader.utils.ImageProcessor.extractTextFromImage(tempImage).trim();
+                        ocrText.append(pageOcr).append("\n");
                     } finally {
                         tempImage.delete();
                     }
-                    if (text.isEmpty()) {
-                        throw new IOException("No se pudo extraer texto del PDF ni mediante OCR. El documento podría estar vacío o tener un formato no compatible.");
-                    }
-                } catch (Exception ocrEx) {
-                    throw new IOException("No se pudo extraer texto del PDF ni mediante OCR. El documento podría estar vacío o tener un formato no compatible.", ocrEx);
+                }
+                text = ocrText.toString().trim();
+                if (text.isEmpty()) {
+                    throw new IOException("No se pudo extraer texto del PDF ni mediante OCR. El documento podría estar vacío o tener un formato no compatible.");
                 }
             }
-            
             return text;
-    
         } catch (InvalidPasswordException e) {
             return "El PDF está protegido con contraseña. Por favor, proporcione la contraseña correcta.";
         } catch (IOException e) {
@@ -241,7 +261,6 @@ public class DocumentProcessingService {
         } catch (Exception e) {
             return "Error inesperado al procesar el PDF: " + e.getMessage();
         } finally {
-            // Cerrar el documento y el InputStream al finalizar
             try {
                 if (document != null) {
                     document.close();
@@ -285,6 +304,10 @@ public class DocumentProcessingService {
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
+        boolean esBancoProvincia = textoExtraido.toLowerCase().contains("banco provincia") || fileNameLower.contains("provincia");
+        if (esBancoProvincia) {
+            return BancoProvincia.parseBancoProvinciaTransfer(textoExtraido, doc);
+        }
         // Detectar si es transferencia de PREX
         boolean isPrex = false;
         String[] lines = textoExtraido.split("\r?\n");
@@ -306,7 +329,12 @@ public class DocumentProcessingService {
             isUala = true;
         }
         if (isUala) {
-            return Uala.parseUalaTransfer(textoExtraido, doc);
+            TransferDTO ualaTransfer = Uala.parseUalaTransfer(textoExtraido, doc);
+            
+            if (ualaTransfer != null && ualaTransfer.getAccountDestiny() != null) {
+                ualaTransfer.setBank(ualaTransfer.getAccountDestiny());
+            }
+            return ualaTransfer;
         }
         if (!isPrex) {
             if (fileNameLower.contains("prex")) {
@@ -322,7 +350,7 @@ public class DocumentProcessingService {
         // Si no es ninguno, lógica genérica
         textoExtraido = textoExtraido.replaceAll("[^\\p{Print}\\s]", "").trim();
         lines = textoExtraido.split("\\r?\\n");
-    
+
         String destinatario = "";
         String fecha = "";
         String cuitSender = "";
@@ -330,7 +358,6 @@ public class DocumentProcessingService {
         String bankReceiver = "";
         String tipoOperacion = "";
        
-        
         String textoCompleto = String.join(" ", lines).toLowerCase();
         if (tipoOperacion.isEmpty()) {
             if (textoCompleto.contains("comprobante de transferencia") || 
@@ -345,6 +372,37 @@ public class DocumentProcessingService {
             }
         }
 
+        // NUEVO: Si se detectan los datos clave, devolver formato base aunque no se reconozca banco
+        boolean tieneFecha = !fecha.isEmpty() || textoCompleto.matches(".*\\d{1,2}\\s+de\\s+[a-záéíóúñ]+\\s+de\\s+\\d{4}.*");
+        boolean tieneMonto = textoCompleto.contains("$") || textoCompleto.matches(".*\\d{1,3}(\\.\\d{3})*,\\d{2}.*");
+        boolean tieneCuit = textoCompleto.contains("cuit") || textoCompleto.matches(".*\\d{2}-\\d{8}-\\d{1}.*");
+        if (tieneFecha && tieneMonto && tieneCuit) {
+            // Extraer valores si están vacíos
+            if (fecha.isEmpty()) fecha = extractDate(textoCompleto);
+            if (monto.isEmpty()) {
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\s*([0-9.]+)").matcher(textoCompleto);
+                if (matcher.find()) monto = matcher.group(1);
+            }
+            if (cuitSender.isEmpty()) {
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}-\\d{8}-\\d{1})").matcher(textoCompleto);
+                if (matcher.find()) cuitSender = matcher.group(1);
+            }
+            // Intentar extraer banco receptor si sigue vacío
+            if (bankReceiver == null || bankReceiver.trim().isEmpty()) {
+                java.util.regex.Pattern patternBanco = java.util.regex.Pattern.compile("(?:para|destinatario|beneficiario)[:\\s]*([A-Za-z0-9 .\\-]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
+                java.util.regex.Matcher matcherBanco = patternBanco.matcher(textoCompleto);
+                if (matcherBanco.find()) {
+                    bankReceiver = matcherBanco.group(1).trim();
+                }
+            }
+            TransferDTO transferencia = TransferDTO.builder().build();
+            transferencia.setDate(fecha);
+            transferencia.setTypeOFTransfer(tipoOperacion.isEmpty() ? "Transferencia" : tipoOperacion);
+            transferencia.setCuit(cuitSender);
+            transferencia.setAmount(monto);
+            transferencia.setBank(bankReceiver);
+            return transferencia;
+        }
         for (int i = 0; i < lines.length; i++) {
             String linea = lines[i];
             String lower = linea.toLowerCase().trim();
@@ -376,10 +434,19 @@ public class DocumentProcessingService {
                 lower.contains("diciembre")) {
                     fecha = linea.trim();
                 }
+                if (lower.contains("fundraiser")) {
+                    bankReceiver = "FUNDRAISER s.a.s.";
+                }else {
+                    if (lower.contains("cuit") || lower.contains("cuil") || lower.contains("cuit:")) {
+                        cuitSender = linea.trim();
+                    }
+                }
             }
 
             if (isPdfFormat) {
-                // Aquí ya no se procesa PREX ni BRUBANK, solo lógica genérica para PDF
+                // lógica genérica para PDF
+
+                
                 // Banco FUNDRAISER
                 if (lower.contains("fundraiser")) {
                     bankReceiver = "FUNDRAISER s.a.s.";
@@ -532,6 +599,7 @@ public class DocumentProcessingService {
                 }
                 if (lower.contains("neblockchain") || lower.contains("neblockchain sa")) {
                     bankReceiver = "NEBLOCKCHAIN SA";
+                    continue;
                 } else if (lower.contains("para") || lower.contains("destinatario") || lower.contains("beneficiario")) {
                     String posibleBanco = original.replaceAll("(?i)para:|destinatario:|beneficiario:", "").trim();
                     if (!posibleBanco.isEmpty() && bankReceiver.isEmpty()) {
@@ -548,6 +616,9 @@ public class DocumentProcessingService {
 
         // Validar que al menos tengamos algunos datos básicos
         if (!destinatario.isEmpty() || !cuitSender.isEmpty()) {
+            if (bankReceiver == null || bankReceiver.trim().isEmpty()) {
+                bankReceiver = "Desconocido";
+            }
             TransferDTO transferencia = TransferDTO.builder()
                 .name("") // No mostrar destinatario
                 .date(fecha)
