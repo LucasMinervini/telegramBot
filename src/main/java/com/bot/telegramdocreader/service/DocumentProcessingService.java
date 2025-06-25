@@ -17,6 +17,7 @@ import com.bot.telegramdocreader.service.banks.Prex;
 import com.bot.telegramdocreader.service.banks.Uala;
 import com.bot.telegramdocreader.service.banks.BancoProvincia;
 import com.bot.telegramdocreader.service.banks.Brubank;
+import com.bot.telegramdocreader.service.banks.MercadoPago;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -119,9 +120,97 @@ public class DocumentProcessingService {
                             return Prex.formatPrex(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("UALA")) {
                             return Uala.formatUala(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BRUBANK")) {
+                            return Brubank.formatBrubank(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
+                            return BancoProvincia.formatBancoProvincia(transferencia);
                         } else {
-                            String formatBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
-                            return String.format(formatBase,
+                            String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
+                            return String.format(formatoBase,
+                                transferencia.getDate(),
+                                transferencia.getTypeOFTransfer(),
+                                cuitEmisor,
+                                transferencia.getAmount(),
+                                transferencia.getBank());
+                        }
+                    } catch (IOException e) {
+                        System.out.println("Error al generar el archivo Excel: " + e.getMessage());
+                        return "Error al generar el archivo Excel: " + e.getMessage();
+                    }
+                } else {
+                    // Si el texto extraído contiene Banco Provincia, intenta forzar el parseo y formateo
+                    if (textoExtraido.toLowerCase().contains("banco provincia") || textoExtraido.toLowerCase().contains("provincia")) {
+                        TransferDTO transferenciaForzada = BancoProvincia.parseBancoProvinciaTransfer(textoExtraido, doc);
+                        if (transferenciaForzada != null) {
+                            return BancoProvincia.formatBancoProvincia(transferenciaForzada);
+                        }
+                    }
+                    return textoExtraido;
+                }
+            } else if (isPdf(doc)) {
+                textoExtraido = extractTextFromPdf(doc, botToken);
+                System.out.println("[DEBUG] Texto extraído del PDF: " + textoExtraido); 
+                if (textoExtraido.startsWith("Error") || textoExtraido.contains("protegido con contraseña")) {
+                    return textoExtraido;
+                }
+                boolean isMercadoPago = false;
+                String[] lines = textoExtraido.split("\r?\n");
+                for (int i = 0; i < Math.min(5, lines.length); i++) {
+                    String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
+                    if (lineNormalize.contains("mercadopago") || lineNormalize.contains("mpago") || lineNormalize.contains("mercado pago")) {
+                        isMercadoPago = true;
+                        break;
+                    }
+                }
+                if (!isMercadoPago) {
+                    String fileNameLower = doc.getFileName().toLowerCase();
+                    if (fileNameLower.contains("mercadopago") || fileNameLower.contains("mpago") || fileNameLower.contains("mercado pago")) {
+                        isMercadoPago = true;
+                    }
+                }
+                if (textoExtraido.matches("(?i).*\\bmercado\\s*pago\\b.*")) {
+                    isMercadoPago = true;
+                }
+                if (isMercadoPago) {
+                    TransferDTO transferenciaMP = MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
+                    if (transferenciaMP != null) {
+                        lastTransfer = transferenciaMP;
+                        telegramFileService.createExcelFile(transferenciaMP);
+                        try {
+                            String excelResult = ExportExcel.exportTransferToExcel(transferenciaMP);
+                            if (excelResult.startsWith("Error")) {
+                                System.out.println("Error al generar el archivo Excel: " + excelResult);
+                                return "Error al generar el archivo Excel: " + excelResult;
+                            }
+                            return MercadoPago.formatMercadoPago(transferenciaMP);
+                        } catch (IOException e) {
+                            System.out.println("Error al generar el archivo Excel: " + e.getMessage());
+                            return "Error al generar el archivo Excel: " + e.getMessage();
+                        }
+                    }
+                }
+                TransferDTO transferencia = mapperTransf(textoExtraido, true, doc);
+                if (transferencia != null) {
+                    lastTransfer = transferencia;
+                    telegramFileService.createExcelFile(transferencia);
+                    try {
+                        String excelResult = ExportExcel.exportTransferToExcel(transferencia);
+                        if (excelResult.startsWith("Error")) {
+                            System.out.println("Error al generar el archivo Excel: " + excelResult);
+                            return "Error al generar el archivo Excel: " + excelResult;
+                        }
+                        String cuitEmisor = (transferencia.getCuit() != null && !transferencia.getCuit().trim().isEmpty()) ? transferencia.getCuit() : "No hay CUIT del emisor";
+                        if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("PREX")) {
+                            return Prex.formatPrex(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("UALA")) {
+                            return Uala.formatUala(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BRUBANK")) {
+                            return Brubank.formatBrubank(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
+                            return BancoProvincia.formatBancoProvincia(transferencia);
+                        } else {
+                            String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
+                            return String.format(formatoBase,
                                 transferencia.getDate(),
                                 transferencia.getTypeOFTransfer(),
                                 cuitEmisor,
@@ -135,46 +224,8 @@ public class DocumentProcessingService {
                 } else {
                     return textoExtraido;
                 }
-            } else if (isPdf(doc)) {
-                textoExtraido = extractTextFromPdf(doc, botToken);
-                System.out.println("[DEBUG] Texto extraído del PDF: " + textoExtraido); 
-                if (textoExtraido.startsWith("Error") || textoExtraido.contains("protegido con contraseña")) {
-                    return textoExtraido;
-                }
             } else {
                 return "Formato de archivo no soportado.";
-            }
-            TransferDTO transferencia = mapperTransf(textoExtraido, isPdfFormat, doc);
-            if (transferencia != null) {
-                lastTransfer = transferencia;
-                // Extraer y asignar CUIT del emisor
-                String cuitEmisor = extractCuitSender(textoExtraido);
-                transferencia.setCuit(cuitEmisor);
-                telegramFileService.createExcelFile(transferencia);
-                try {
-                    String excelResult = ExportExcel.exportTransferToExcel(transferencia);
-                    if (excelResult.startsWith("Error")) {
-                        System.out.println("Error al generar el archivo Excel: " + excelResult);
-                        return "Error al generar el archivo Excel: " + excelResult;
-                    }
-                    // Formatear CUIT del emisor o mostrar mensaje si no hay
-                    if (transferencia.getBank().equalsIgnoreCase("PREX")) {
-                            return Prex.formatPrex(transferencia);
-                    } else {
-                        String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
-                        return String.format(formatoBase,
-                            transferencia.getDate(),
-                            transferencia.getTypeOFTransfer(),
-                            cuitEmisor,
-                            transferencia.getAmount(),
-                            transferencia.getBank());
-                    }
-                } catch (IOException e) {
-                    System.out.println("Error al generar el archivo Excel: " + e.getMessage());
-                    return "Error al generar el archivo Excel: " + e.getMessage();
-                }
-            } else {
-                return textoExtraido;
             }
         } catch (Exception e) {
             System.out.println("Error en el procesamiento del documento: " + e.getMessage());
@@ -304,9 +355,91 @@ public class DocumentProcessingService {
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
-        boolean esBancoProvincia = textoExtraido.toLowerCase().contains("banco provincia") || fileNameLower.contains("provincia");
-        if (esBancoProvincia) {
-            return BancoProvincia.parseBancoProvinciaTransfer(textoExtraido, doc);
+        boolean isBankProvincia = textoExtraido.toLowerCase().contains("banco provincia") || fileNameLower.contains("provincia")
+            || textoExtraido.toLowerCase().contains("nueva transferencia");
+        if (isBankProvincia) {
+            // Refuerzo de parser para Banco Provincia
+            String[] linesBP = textoExtraido.split("\r?\n");
+            String fecha = "";
+            String transactionNumber = "";
+            String titular = "";
+            String titularCuit = "";
+            String accountToDebit = "";
+            String titularCuentaDestino = "";
+            String cuitDestino = "";
+            String accountDestiny = "";
+            String cbuDestiny = "";
+            String referencia = "";
+            String motivo = "";
+            String monto = "";
+            String fechaAcreditacion = "";
+            for (String line : linesBP) {
+                String lower = line.toLowerCase().trim();
+                String original = line.trim();
+                if (fecha.isEmpty() && lower.matches("\\d{2}/\\d{2}/\\d{4}.*")) {
+                    fecha = original;
+                }
+                if (lower.contains("número de transacción") || lower.contains("numero de transaccion")) {
+                    transactionNumber = original.replaceAll("(?i)n[úu]mero de transacci[óo]n", "").replace(":", "").trim();
+                }
+                if (lower.contains("titular:") && titular.isEmpty()) {
+                    String value = original.replaceAll("(?i)titular:", "").trim();
+                    if (value.contains("/")) {
+                        String[] partes = value.split("/");
+                        titular = partes[0].trim();
+                        titularCuit = partes.length > 1 ? partes[1].replaceAll("[^0-9]", "").trim() : "";
+                    } else {
+                        titular = value;
+                    }
+                }
+                if (lower.contains("cuenta a debitar")) {
+                    accountToDebit = original.replaceAll("(?i)cuenta a debitar:", "").trim();
+                }
+                if (lower.contains("titular cuenta destino")) {
+                    titularCuentaDestino = original.replaceAll("(?i)titular cuenta destino:", "").trim();
+                    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{11})").matcher(titularCuentaDestino);
+                    if (matcher.find()) cuitDestino = matcher.group(1);
+                }
+                if (lower.contains("cuenta destino")) {
+                    accountDestiny = original.replaceAll("(?i)cuenta destino:", "").trim();
+                    cbuDestiny = accountDestiny;
+                }
+                if (lower.contains("fecha de acreditación") || lower.contains("fecha de acreditacion")) {
+                    fechaAcreditacion = original.replaceAll("(?i)fecha de acreditaci[oó]n", "").replace(":", "").trim();
+                }
+                if (lower.contains("referencia")) {
+                    referencia = original.replaceAll("(?i)referencia:", "").trim();
+                }
+                if (lower.contains("motivo")) {
+                    motivo = original.replaceAll("(?i)motivo:", "").trim();
+                }
+                if ((lower.contains("importe") || lower.contains("monto")) && monto.isEmpty()) {
+                    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\s*([0-9.,]+)").matcher(original);
+                    if (matcher.find()) monto = matcher.group(1);
+                }
+            }
+            // Si no se encontró CUIT en titular cuenta destino, usar el de titular si está
+            if (cuitDestino.isEmpty() && !titularCuit.isEmpty()) {
+                cuitDestino = titularCuit;
+            }
+            if (cuitDestino.length() == 11) {
+                cuitDestino = cuitDestino.substring(0,2) + "-" + cuitDestino.substring(2,10) + "-" + cuitDestino.substring(10);
+            }
+            return TransferDTO.builder()
+                .date(fecha)
+                .transactionNumber(transactionNumber)
+                .titular(titular)
+                .accountToDebit(accountToDebit)
+                .titularCuentaDestino(titularCuentaDestino)
+                .accountDestiny(accountDestiny)
+                .cbuDestiny(cbuDestiny)
+                .referencia(referencia)
+                .motivo(motivo)
+                .amount(monto)
+                .cuit(cuitDestino)
+                .bank(titular)
+                .typeOFTransfer("Transferencia")
+                .build();
         }
         // Detectar si es transferencia de PREX
         boolean isPrex = false;
@@ -373,12 +506,21 @@ public class DocumentProcessingService {
         }
 
         // NUEVO: Si se detectan los datos clave, devolver formato base aunque no se reconozca banco
-        boolean tieneFecha = !fecha.isEmpty() || textoCompleto.matches(".*\\d{1,2}\\s+de\\s+[a-záéíóúñ]+\\s+de\\s+\\d{4}.*");
+        boolean tieneFecha = !fecha.isEmpty() || textoCompleto.matches(".*\\d{2}/\\d{2}/\\d{4}.*");
         boolean tieneMonto = textoCompleto.contains("$") || textoCompleto.matches(".*\\d{1,3}(\\.\\d{3})*,\\d{2}.*");
         boolean tieneCuit = textoCompleto.contains("cuit") || textoCompleto.matches(".*\\d{2}-\\d{8}-\\d{1}.*");
         if (tieneFecha && tieneMonto && tieneCuit) {
             // Extraer valores si están vacíos
-            if (fecha.isEmpty()) fecha = extractDate(textoCompleto);
+            if (fecha.isEmpty()) {
+                // Buscar línea que contenga 'Fecha' y extraer la fecha
+                for (String line : lines) {
+                    if (line.toLowerCase().contains("fecha")) {
+                        fecha = extractDate(line);
+                        if (!fecha.isEmpty()) break;
+                    }
+                }
+                if (fecha.isEmpty()) fecha = extractDate(textoCompleto);
+            }
             if (monto.isEmpty()) {
                 java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\s*([0-9.]+)").matcher(textoCompleto);
                 if (matcher.find()) monto = matcher.group(1);
@@ -387,12 +529,24 @@ public class DocumentProcessingService {
                 java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}-\\d{8}-\\d{1})").matcher(textoCompleto);
                 if (matcher.find()) cuitSender = matcher.group(1);
             }
-            // Intentar extraer banco receptor si sigue vacío
+            // Extraer banco receptor del campo 'Recibe' si existe
             if (bankReceiver == null || bankReceiver.trim().isEmpty()) {
-                java.util.regex.Pattern patternBanco = java.util.regex.Pattern.compile("(?:para|destinatario|beneficiario)[:\\s]*([A-Za-z0-9 .\\-]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
-                java.util.regex.Matcher matcherBanco = patternBanco.matcher(textoCompleto);
-                if (matcherBanco.find()) {
-                    bankReceiver = matcherBanco.group(1).trim();
+                for (String line : lines) {
+                    if (line.toLowerCase().contains("recibe")) {
+                        String[] partes = line.split(":", 2);
+                        if (partes.length == 2) {
+                            bankReceiver = partes[1].trim();
+                            break;
+                        }
+                    }
+                }
+                // Si no se encuentra, intentar patrón anterior
+                if (bankReceiver == null || bankReceiver.trim().isEmpty()) {
+                    java.util.regex.Pattern patternBanco = java.util.regex.Pattern.compile("(?:para|destinatario|beneficiario)[:\\s]*([A-Za-z0-9 .\\-]+)", java.util.regex.Pattern.CASE_INSENSITIVE);
+                    java.util.regex.Matcher matcherBanco = patternBanco.matcher(textoCompleto);
+                    if (matcherBanco.find()) {
+                        bankReceiver = matcherBanco.group(1).trim();
+                    }
                 }
             }
             TransferDTO transferencia = TransferDTO.builder().build();
@@ -693,7 +847,7 @@ public class DocumentProcessingService {
                 if (partes.length == 3) {
                     partes[0] = partes[0].length() == 1 ? "0" + partes[0] : partes[0];
                     partes[1] = partes[1].length() == 1 ? "0" + partes[1] : partes[1];
-                    fecha = String.join("/", partes);
+                    fecha = String.format("/", partes);
                 }
                 
                 return fecha;
