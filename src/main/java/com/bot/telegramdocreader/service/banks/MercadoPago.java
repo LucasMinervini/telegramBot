@@ -61,8 +61,15 @@ public class MercadoPago {
                     cuitEmisor = value.substring(0,2) + "-" + value.substring(2,10) + "-" + value.substring(10);
                 }
             }
-            // Fallback: buscar CUIT emisor en cualquier línea
-            if (cuitEmisor.isEmpty() && lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*")) {
+            // Buscar CUIT emisor en línea con 'CUIT/CUIL' antes de 'Para' (emisor)
+            if (cuitEmisor.isEmpty() && lower.contains("cuit/cuil") && !foundPara) {
+                String value = original.replaceAll("(?i)cuit/cuil", "").replace(":", "").replaceAll("[^0-9]", "").trim();
+                if (value.length() == 11) {
+                    cuitEmisor = value.substring(0,2) + "-" + value.substring(2,10) + "-" + value.substring(10);
+                }
+            }
+            // Fallback: buscar CUIT emisor en cualquier línea antes de 'Para'
+            if (cuitEmisor.isEmpty() && lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*") && !foundPara) {
                 java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}-\\d{8}-\\d{1})").matcher(original);
                 if (matcher.find()) cuitEmisor = matcher.group(1);
             }

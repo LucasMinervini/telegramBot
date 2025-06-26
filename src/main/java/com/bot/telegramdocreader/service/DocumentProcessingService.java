@@ -355,6 +355,10 @@ public class DocumentProcessingService {
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
+        boolean isPersonalPay = textoExtraido.toLowerCase().contains("personal pay") || fileNameLower.contains("personal pay") || textoExtraido.toLowerCase().contains("enviaste dinero") || textoExtraido.toLowerCase().contains("personalpay");
+        if (isPersonalPay) {
+            return com.bot.telegramdocreader.service.banks.PersonalPay.parsePersonalPayTransfer(textoExtraido, doc);
+        }
         boolean isBankProvincia = textoExtraido.toLowerCase().contains("banco provincia") || fileNameLower.contains("provincia")
             || textoExtraido.toLowerCase().contains("nueva transferencia");
         if (isBankProvincia) {
