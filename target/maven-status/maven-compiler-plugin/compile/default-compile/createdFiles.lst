@@ -1,9 +1,15 @@
+com\bot\telegramdocreader\service\banks\BancoProvincia.class
+com\bot\telegramdocreader\config\MercadoPagoConfig.class
 com\bot\telegramdocreader\config\TelegramBotConfig.class
+com\bot\telegramdocreader\service\banks\Uala.class
 com\bot\telegramdocreader\bot\TelegramDocBot.class
 com\bot\telegramdocreader\utils\PdfProcessor.class
+com\bot\telegramdocreader\service\banks\PersonalPay.class
 com\bot\telegramdocreader\TelegramDocReaderApplication.class
 com\bot\telegramdocreader\service\banks\Prex.class
+com\bot\telegramdocreader\service\banks\MercadoPago.class
 com\bot\telegramdocreader\dto\TransferDTO.class
+com\bot\telegramdocreader\service\banks\Bancor.class
 com\bot\telegramdocreader\service\DocumentProcessingService.class
 com\bot\telegramdocreader\service\TelegramFileService.class
 com\bot\telegramdocreader\utils\ImageProcessor.class

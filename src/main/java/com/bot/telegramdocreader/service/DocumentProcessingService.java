@@ -18,6 +18,7 @@ import com.bot.telegramdocreader.service.banks.Uala;
 import com.bot.telegramdocreader.service.banks.BancoProvincia;
 import com.bot.telegramdocreader.service.banks.Brubank;
 import com.bot.telegramdocreader.service.banks.MercadoPago;
+import com.bot.telegramdocreader.service.banks.Bancor;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -39,6 +40,21 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 @Service
 public class DocumentProcessingService {
 
+    // Constantes para mejorar mantenibilidad
+    private static final int MAX_LINES_TO_CHECK = 15;
+    private static final String TESSERACT_DATA_PATH = "C:\\Program Files\\Tesseract-OCR\\tessdata";
+    private static final String TESSERACT_LANGUAGE = "spa";
+    private static final String TELEGRAM_FILE_URL_TEMPLATE = "https://api.telegram.org/file/bot%s/%s";
+    
+    // Patrones de detección de bancos
+    private static final String[] UALA_PATTERNS = {"uala", "ualá"};
+    private static final String[] MERCADOPAGO_PATTERNS = {"mercadopago", "mpago", "mercado pago", "mercado_pago"};
+    private static final String[] BANCOR_PATTERNS = {"bancor", "banco de córdoba", "banco córdoba", "cordoba", "córdoba"};
+    private static final String[] PREX_PATTERNS = {"prex"};
+    private static final String[] PERSONAL_PAY_PATTERNS = {"personal pay", "personalpay"};
+    private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
+    private static final String[] BRUBANK_PATTERNS = {"brubank"};
+    
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
     private TransferDTO lastTransfer; // Almacenar la última transferencia procesada
@@ -59,34 +75,17 @@ public class DocumentProcessingService {
             
             if (isImage(doc)) {
                 File file = getFileFromTelegram(doc.getFileId(), botToken);
-                URL fileUrl = new URL("https://api.telegram.org/file/bot" + botToken + "/" + file.getFilePath());
+                URL fileUrl = new URL(String.format(TELEGRAM_FILE_URL_TEMPLATE, botToken, file.getFilePath()));
                 InputStream inputStream = fileUrl.openStream();
                 BufferedImage image = ImageIO.read(inputStream);
                 ITesseract instance = new Tesseract();
-                instance.setDatapath("C:\\Program Files\\Tesseract-OCR\\tessdata");
-                instance.setLanguage("spa");
+                instance.setDatapath(TESSERACT_DATA_PATH);
+                instance.setLanguage(TESSERACT_LANGUAGE);
                 instance.setPageSegMode(1);
                 instance.setOcrEngineMode(1);
                 textoExtraido = instance.doOCR(image);
                 // --- INICIO LOG UALA ---
-                boolean isUala = false;
-                String[] lines = textoExtraido.split("\r?\n");
-                for (int i = 0; i < Math.min(5, lines.length); i++) {
-                    String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
-                    if (lineNormalize.contains("uala") || containsApproxWord(lineNormalize, "uala", 1) || containsApproxWord(lineNormalize, "ualá", 1)) {
-                        isUala = true;
-                        break;
-                    }
-                }
-                if (!isUala) {
-                    String fileNameLower = doc.getFileName().toLowerCase();
-                    if (fileNameLower.contains("uala")) {
-                        isUala = true;
-                    }
-                }
-                if(textoExtraido.matches("(?i).*\\buala\\b.*")) {
-                    isUala = true;
-                }
+                boolean isUala = detectBank(textoExtraido, doc.getFileName(), UALA_PATTERNS);
                 TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
                 if (isUala && transferencia != null) {
                     lastTransfer = transferencia;
@@ -124,6 +123,8 @@ public class DocumentProcessingService {
                             return Brubank.formatBrubank(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
                             return BancoProvincia.formatBancoProvincia(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
+                            return Bancor.formatBancor(transferencia);
                         } else {
                             String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                             return String.format(formatoBase,
@@ -149,7 +150,7 @@ public class DocumentProcessingService {
                 }
             } else if (isPdf(doc)) {
                 textoExtraido = extractTextFromPdf(doc, botToken);
-                System.out.println("[DEBUG] Texto extraído del PDF: " + textoExtraido); 
+                 
                 if (textoExtraido.startsWith("Error") || textoExtraido.contains("protegido con contraseña")) {
                     return textoExtraido;
                 }
@@ -208,6 +209,8 @@ public class DocumentProcessingService {
                             return Brubank.formatBrubank(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
                             return BancoProvincia.formatBancoProvincia(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
+                            return Bancor.formatBancor(transferencia);
                         } else {
                             String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                             return String.format(formatoBase,
@@ -350,17 +353,34 @@ public class DocumentProcessingService {
 
     private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Detectar si es transferencia de Brubank por texto o por nombre de archivo
-        String fileNameLower = doc.getFileName().toLowerCase();
-        boolean esBrubank = textoExtraido.toLowerCase().contains("brubank") || fileNameLower.contains("brubank");
+        boolean esBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
-        boolean isPersonalPay = textoExtraido.toLowerCase().contains("personal pay") || fileNameLower.contains("personal pay") || textoExtraido.toLowerCase().contains("enviaste dinero") || textoExtraido.toLowerCase().contains("personalpay");
+        boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || 
+                                textoExtraido.toLowerCase().contains("enviaste dinero");
         if (isPersonalPay) {
             return com.bot.telegramdocreader.service.banks.PersonalPay.parsePersonalPayTransfer(textoExtraido, doc);
         }
-        boolean isBankProvincia = textoExtraido.toLowerCase().contains("banco provincia") || fileNameLower.contains("provincia")
-            || textoExtraido.toLowerCase().contains("nueva transferencia");
+        boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS);
+
+        if (isMercadoPago) {
+            return com.bot.telegramdocreader.service.banks.MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
+        }
+        
+        // Detección de Bancor por patrones y contenido específico
+        boolean bancorByContent = detectBancorByContent(textoExtraido);
+        boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
+        
+       
+        
+        if (isBancor) {
+            
+            return com.bot.telegramdocreader.service.banks.Bancor.parseBancorTransfer(textoExtraido, doc);
+        }
+        
+        boolean isBankProvincia = detectBank(textoExtraido, doc.getFileName(), BANCO_PROVINCIA_PATTERNS) ||
+                                  textoExtraido.toLowerCase().contains("nueva transferencia");
         if (isBankProvincia) {
             // Refuerzo de parser para Banco Provincia
             String[] linesBP = textoExtraido.split("\r?\n");
@@ -449,22 +469,7 @@ public class DocumentProcessingService {
         boolean isPrex = false;
         String[] lines = textoExtraido.split("\r?\n");
         // Detectar si es transferencia de Ualá
-        boolean isUala = false;
-        for (int i = 0; i < Math.min(5, lines.length); i++) {
-            String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
-            if (lineNormalize.contains("uala") || containsApproxWord(lineNormalize, "uala", 1) || containsApproxWord(lineNormalize, "ualá", 1)) {
-                isUala = true;
-                break;
-            }
-        }
-        if (!isUala) {
-            if (fileNameLower.contains("uala")) {
-                isUala = true;
-            }
-        }
-        if(textoExtraido.matches("(?i).*\\buala\\b.*")) {
-            isUala = true;
-        }
+        boolean isUala = detectBank(textoExtraido, doc.getFileName(), UALA_PATTERNS);
         if (isUala) {
             TransferDTO ualaTransfer = Uala.parseUalaTransfer(textoExtraido, doc);
             
@@ -473,14 +478,7 @@ public class DocumentProcessingService {
             }
             return ualaTransfer;
         }
-        if (!isPrex) {
-            if (fileNameLower.contains("prex")) {
-                isPrex = true;
-            }
-        }
-        if(textoExtraido.matches("(?i).*\bprex\b.*")) {
-            isPrex = true;
-        }
+        isPrex = detectBank(textoExtraido, doc.getFileName(), PREX_PATTERNS);
         if (isPrex) {
             return Prex.parsePrexTransfer(textoExtraido, doc);
         }
@@ -929,5 +927,59 @@ private String extractCuitSender(String texto) {
     return null;
 }
 
+/**
+ * Método auxiliar para detectar bancos basado en patrones
+ * @param texto Texto extraído del documento
+ * @param fileName Nombre del archivo
+ * @param patterns Patrones a buscar
+ * @return true si se detecta el banco
+ */
+private boolean detectBank(String texto, String fileName, String[] patterns) {
+    String textoLower = texto.toLowerCase();
+    String fileNameLower = fileName.toLowerCase();
+    
+    // Verificar en el nombre del archivo
+    for (String pattern : patterns) {
+        if (fileNameLower.contains(pattern)) {
+            return true;
+        }
+    }
+    
+    // Verificar en las primeras líneas del texto
+    String[] lines = texto.split("\\r?\\n");
+    for (int i = 0; i < Math.min(MAX_LINES_TO_CHECK, lines.length); i++) {
+        String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
+        for (String pattern : patterns) {
+            if (lineNormalize.contains(pattern) || 
+                containsApproxWord(lineNormalize, pattern, 1)) {
+                return true;
+            }
+        }
+    }
+    
+    // Verificar en todo el texto con regex
+    for (String pattern : patterns) {
+        if (textoLower.matches("(?i).*\\b" + pattern.replace(" ", "\\s*") + "\\b.*")) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Método auxiliar para detectar Bancor por contenido específico
+ * @param texto Texto extraído del documento
+ * @return true si se detecta como Bancor por contenido
+ */
+private boolean detectBancorByContent(String texto) {
+    String textoLower = texto.toLowerCase();
+    return textoLower.contains("transferencia enviada") &&
+           textoLower.contains("transferiste") &&
+           textoLower.contains("datos origen") &&
+           textoLower.contains("datos destino") &&
+           textoLower.contains("identificador de la transferencia") &&
+           textoLower.contains("cód. transacción");
+}
 
 }

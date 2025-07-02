@@ -52,8 +52,10 @@ public class PersonalPay {
                 cuit = original.replaceAll("[^0-9]", "").trim();
             }
             if (lower.contains("$") && monto.isEmpty()) {
+                
                 // Extraer monto y formatear como 3.000,00
                 String montoRaw = original.replaceAll("[^0-9.,]", "").trim();
+
                 // Si el monto es tipo 3.00000, convertir correctamente a 3.000,00
                 if (montoRaw.matches("\\d{1,3}(\\.\\d{3})*(\\.\\d{2,})") || montoRaw.matches("\\d+\\.\\d{2,}") || montoRaw.matches("\\d{1,3}(\\.\\d{3})+")) {
                     // Si tiene formato 3.00000 o 3000.00
