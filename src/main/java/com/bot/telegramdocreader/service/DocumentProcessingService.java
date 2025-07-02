@@ -19,6 +19,7 @@ import com.bot.telegramdocreader.service.banks.BancoProvincia;
 import com.bot.telegramdocreader.service.banks.Brubank;
 import com.bot.telegramdocreader.service.banks.MercadoPago;
 import com.bot.telegramdocreader.service.banks.Bancor;
+import com.bot.telegramdocreader.service.banks.NaranjaX;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -37,6 +38,8 @@ import javax.imageio.ImageIO;
 import org.apache.commons.lang3.StringUtils;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
+import com.bot.telegramdocreader.service.banks.Galicia;
+
 @Service
 public class DocumentProcessingService {
 
@@ -54,6 +57,7 @@ public class DocumentProcessingService {
     private static final String[] PERSONAL_PAY_PATTERNS = {"personal pay", "personalpay"};
     private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
     private static final String[] BRUBANK_PATTERNS = {"brubank"};
+    private static final String[] NARANJAX_PATTERNS = {"naranjax"};
     
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
@@ -243,7 +247,7 @@ public class DocumentProcessingService {
     private boolean isImage(Document doc) {
         String fileName = doc.getFileName().toLowerCase();
         String mimeType = doc.getMimeType().toLowerCase();
-        
+    
         // Verificar por extensión de archivo
         boolean isImageByExtension = fileName.endsWith(".jpg") || 
                                    fileName.endsWith(".jpeg") || 
@@ -252,10 +256,12 @@ public class DocumentProcessingService {
                                    fileName.endsWith(".gif") || 
                                    fileName.endsWith(".bmp") ||
                                    fileName.endsWith(".tiff"); 
-        
+    
         // Verificar por tipo MIME
         boolean isImageByMimeType = mimeType.startsWith("image/");
-        
+    
+        // Algunos clientes de Telegram envían imágenes como documentos con mimeType incorrecto (ej: application/octet-stream)
+        // Si la extensión es de imagen, considerar imagen aunque el mimeType no sea image/
         return isImageByExtension || isImageByMimeType;
     }
     
@@ -368,6 +374,16 @@ public class DocumentProcessingService {
             return com.bot.telegramdocreader.service.banks.MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
         }
         
+        // Detección NaranjaX
+        boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
+        if (isNaranjaX) {
+            return com.bot.telegramdocreader.service.banks.NaranjaX.parseNaranjaXTransfer(textoExtraido, doc);
+        }
+        // Detección Galicia
+        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), new String[]{"galicia"});
+        if (isGalicia) {
+            return com.bot.telegramdocreader.service.banks.Galicia.parseGaliciaTransfer(textoExtraido, doc);
+        }
         // Detección de Bancor por patrones y contenido específico
         boolean bancorByContent = detectBancorByContent(textoExtraido);
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
@@ -981,5 +997,4 @@ private boolean detectBancorByContent(String texto) {
            textoLower.contains("identificador de la transferencia") &&
            textoLower.contains("cód. transacción");
 }
-
-}
+    }
