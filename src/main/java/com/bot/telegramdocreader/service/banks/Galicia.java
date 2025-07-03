@@ -9,7 +9,6 @@ public class Galicia {
         String fecha = "";
         String tipoOperacion = "";
         String cuitEmisor = "";
-        String cuitReceptor = "";
         String monto = "";
         String bancoReceptor = "";
         String cuentaReceptora = "";

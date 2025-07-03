@@ -417,9 +417,6 @@ public class MercadoPago {
         return "";
     }
     
-    /**
-     * Crea un TransferDTO vacío en caso de error
-     */
     private static TransferDTO createEmptyTransferDTO() {
         return TransferDTO.builder()
                 .date("")

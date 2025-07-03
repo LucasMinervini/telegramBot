@@ -5,26 +5,30 @@ import org.telegram.telegrambots.meta.api.objects.Document;
 
 public class BancoProvincia {
     public static String formatBancoProvincia(TransferDTO transferencia) {
-        
         // Formato solicitado por el usuario
         String formato =  "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
+        String bancoReceptor = transferencia.getTitularCuentaDestino() != null && !transferencia.getTitularCuentaDestino().isEmpty() ? transferencia.getTitularCuentaDestino() : "-";
+        String tipoOperacion = transferencia.getTypeOFTransfer() != null && (transferencia.getTypeOFTransfer().equalsIgnoreCase("debito") || transferencia.getTypeOFTransfer().equalsIgnoreCase("transferencia")) ? transferencia.getTypeOFTransfer() : "transferencia";
         return String.format(formato,
                 transferencia.getDate() != null ? transferencia.getDate() : "-",
-                transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "-",
+                tipoOperacion,
                 transferencia.getCuit() != null ? transferencia.getCuit() : "-",
                 transferencia.getAmount() != null ? transferencia.getAmount() : "-",
-                transferencia.getBank() != null ? transferencia.getBank() : "-");
+                bancoReceptor);
     }
 
     public static TransferDTO parseBancoProvinciaTransfer(String textoExtraido, Document doc) {
         String[] lines = textoExtraido.split("\r?\n");
         String fecha = "";
         String transactionNumber = "";
+        String tipoOperacion = "";
         String titular = "";
         String titularCuit = "";
         String cuit = "";
         String monto = "";
-        String bancoReceptor = "Banco Provincia";
+        
+        String titularCuentaDestino = "";
+        
         // Buscar todos los campos relevantes de forma tolerante
         for (String line : lines) {
             String lower = line.toLowerCase().trim();
@@ -57,8 +61,23 @@ public class BancoProvincia {
                     if (matcher.find()) monto = matcher.group(1);
                 }
             }
+
+            if (lower.contains("trasnferencia") || lower.contains("transferencia") || lower.contains("transferencia") || lower.contains("enviaste "))  {
+                tipoOperacion = "Transferencia";
+            }
+            if (lower.contains("debito") || lower.contains("deposito") || (lower.contains("débito") || lower.contains("débito"))) {
+                tipoOperacion = "debito";
+            } else if (lower.contains("deposito") || lower.contains("depósito")) {
+                tipoOperacion = "deposito";
+            }
+            if (lower.contains("titular cuenta destino") && titularCuentaDestino.isEmpty()) {
+                String value = original.replaceAll("(?i)titular cuenta destino:", "").trim();
+                if (!value.isEmpty()) titularCuentaDestino = value;
+            }
         }
-        // Si no se encontró fecha, buscar explícitamente la línea con "fecha de acreditación" en todo el texto
+        
+
+
         if (fecha.isEmpty()) {
             java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(?i)fecha de acreditaci[oó]n:?\\s*(\\d{2}/\\d{2}/\\d{4})").matcher(textoExtraido);
             if (matcher.find()) {
@@ -92,10 +111,11 @@ public class BancoProvincia {
         // Si no se encontró ningún dato, igual devolver el formato con guiones
         return TransferDTO.builder()
                 .date(fecha)
-                .typeOFTransfer(transactionNumber)
+                .typeOFTransfer(tipoOperacion)
                 .cuit(cuit)
                 .amount(monto)
-                .bank(bancoReceptor)
+                .bank(titularCuentaDestino)
+                .titularCuentaDestino(titularCuentaDestino)
                 .build();
     }
 }

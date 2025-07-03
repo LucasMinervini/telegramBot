@@ -359,132 +359,53 @@ public class DocumentProcessingService {
     }
 
     private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
-        // Detectar si es transferencia de Brubank por texto o por nombre de archivo
+        // Booleanos para detectar el tipo de banco
         boolean esBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
+        boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || textoExtraido.toLowerCase().contains("enviaste dinero");       
+        boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS);
+        boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
+        boolean isBankProvincia = detectBank(textoExtraido, doc.getFileName(), BANCO_PROVINCIA_PATTERNS) || textoExtraido.toLowerCase().contains("nueva transferencia");
+        boolean bancorByContent = detectBancorByContent(textoExtraido);
+        boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
+        boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
+        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), new String[]{"galicia"});
+
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
-        boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || 
-                                textoExtraido.toLowerCase().contains("enviaste dinero");
+        
         if (isPersonalPay) {
             return com.bot.telegramdocreader.service.banks.PersonalPay.parsePersonalPayTransfer(textoExtraido, doc);
         }
-        boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS);
+        
 
         if (isMercadoPago) {
             return com.bot.telegramdocreader.service.banks.MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
         }
         
-        // Detección NaranjaX
-        boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
+        
+        
         if (isNaranjaX) {
             return com.bot.telegramdocreader.service.banks.NaranjaX.parseNaranjaXTransfer(textoExtraido, doc);
         }
-        // Detección Galicia
-        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), new String[]{"galicia"});
+        
+        
         if (isGalicia) {
             return com.bot.telegramdocreader.service.banks.Galicia.parseGaliciaTransfer(textoExtraido, doc);
         }
-        // Detección de Bancor por patrones y contenido específico
-        boolean bancorByContent = detectBancorByContent(textoExtraido);
-        boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
-
-        boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
-        
        if (isMacro) {
             return com.bot.telegramdocreader.service.banks.Macro.parserMacro(textoExtraido, doc);
        }
         
+       
         if (isBancor) {
             
             return com.bot.telegramdocreader.service.banks.Bancor.parseBancorTransfer(textoExtraido, doc);
         }
         
-        boolean isBankProvincia = detectBank(textoExtraido, doc.getFileName(), BANCO_PROVINCIA_PATTERNS) ||
-                                  textoExtraido.toLowerCase().contains("nueva transferencia");
+        
         if (isBankProvincia) {
-            // Refuerzo de parser para Banco Provincia
-            String[] linesBP = textoExtraido.split("\r?\n");
-            String fecha = "";
-            String transactionNumber = "";
-            String titular = "";
-            String titularCuit = "";
-            String accountToDebit = "";
-            String titularCuentaDestino = "";
-            String cuitDestino = "";
-            String accountDestiny = "";
-            String cbuDestiny = "";
-            String referencia = "";
-            String motivo = "";
-            String monto = "";
-            String fechaAcreditacion = "";
-            for (String line : linesBP) {
-                String lower = line.toLowerCase().trim();
-                String original = line.trim();
-                if (fecha.isEmpty() && lower.matches("\\d{2}/\\d{2}/\\d{4}.*")) {
-                    fecha = original;
-                }
-                if (lower.contains("número de transacción") || lower.contains("numero de transaccion")) {
-                    transactionNumber = original.replaceAll("(?i)n[úu]mero de transacci[óo]n", "").replace(":", "").trim();
-                }
-                if (lower.contains("titular:") && titular.isEmpty()) {
-                    String value = original.replaceAll("(?i)titular:", "").trim();
-                    if (value.contains("/")) {
-                        String[] partes = value.split("/");
-                        titular = partes[0].trim();
-                        titularCuit = partes.length > 1 ? partes[1].replaceAll("[^0-9]", "").trim() : "";
-                    } else {
-                        titular = value;
-                    }
-                }
-                if (lower.contains("cuenta a debitar")) {
-                    accountToDebit = original.replaceAll("(?i)cuenta a debitar:", "").trim();
-                }
-                if (lower.contains("titular cuenta destino")) {
-                    titularCuentaDestino = original.replaceAll("(?i)titular cuenta destino:", "").trim();
-                    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{11})").matcher(titularCuentaDestino);
-                    if (matcher.find()) cuitDestino = matcher.group(1);
-                }
-                if (lower.contains("cuenta destino")) {
-                    accountDestiny = original.replaceAll("(?i)cuenta destino:", "").trim();
-                    cbuDestiny = accountDestiny;
-                }
-                if (lower.contains("fecha de acreditación") || lower.contains("fecha de acreditacion")) {
-                    fechaAcreditacion = original.replaceAll("(?i)fecha de acreditaci[oó]n", "").replace(":", "").trim();
-                }
-                if (lower.contains("referencia")) {
-                    referencia = original.replaceAll("(?i)referencia:", "").trim();
-                }
-                if (lower.contains("motivo")) {
-                    motivo = original.replaceAll("(?i)motivo:", "").trim();
-                }
-                if ((lower.contains("importe") || lower.contains("monto")) && monto.isEmpty()) {
-                    java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\s*([0-9.,]+)").matcher(original);
-                    if (matcher.find()) monto = matcher.group(1);
-                }
-            }
-            // Si no se encontró CUIT en titular cuenta destino, usar el de titular si está
-            if (cuitDestino.isEmpty() && !titularCuit.isEmpty()) {
-                cuitDestino = titularCuit;
-            }
-            if (cuitDestino.length() == 11) {
-                cuitDestino = cuitDestino.substring(0,2) + "-" + cuitDestino.substring(2,10) + "-" + cuitDestino.substring(10);
-            }
-            return TransferDTO.builder()
-                .date(fecha)
-                .transactionNumber(transactionNumber)
-                .titular(titular)
-                .accountToDebit(accountToDebit)
-                .titularCuentaDestino(titularCuentaDestino)
-                .accountDestiny(accountDestiny)
-                .cbuDestiny(cbuDestiny)
-                .referencia(referencia)
-                .motivo(motivo)
-                .amount(monto)
-                .cuit(cuitDestino)
-                .bank(titular)
-                .typeOFTransfer("Transferencia")
-                .build();
+            return com.bot.telegramdocreader.service.banks.BancoProvincia.parseBancoProvinciaTransfer(textoExtraido, doc);
         }
         // Detectar si es transferencia de PREX
         boolean isPrex = false;
@@ -955,6 +876,8 @@ private String extractCuitSender(String texto) {
  * @param patterns Patrones a buscar
  * @return true si se detecta el banco
  */
+
+
 private boolean detectBank(String texto, String fileName, String[] patterns) {
     String textoLower = texto.toLowerCase();
     String fileNameLower = fileName.toLowerCase();
@@ -984,7 +907,6 @@ private boolean detectBank(String texto, String fileName, String[] patterns) {
             return true;
         }
     }
-    
     return false;
 }
 
