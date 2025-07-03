@@ -13,7 +13,9 @@ com\bot\telegramdocreader\service\ExportExcel.class
 com\bot\telegramdocreader\service\banks\BancoProvincia.class
 com\bot\telegramdocreader\config\MercadoPagoConfig.class
 com\bot\telegramdocreader\bot\TelegramDocBot.class
+com\bot\telegramdocreader\service\banks\Galicia.class
 com\bot\telegramdocreader\service\banks\MercadoPago.class
+com\bot\telegramdocreader\service\banks\NaranjaX.class
 com\bot\telegramdocreader\service\DocumentProcessingService.class
 com\bot\telegramdocreader\service\TelegramFileService.class
 com\bot\telegramdocreader\service\banks\Brubank.class

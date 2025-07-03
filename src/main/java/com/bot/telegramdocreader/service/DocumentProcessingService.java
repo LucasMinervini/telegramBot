@@ -58,6 +58,7 @@ public class DocumentProcessingService {
     private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
     private static final String[] BRUBANK_PATTERNS = {"brubank"};
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
+    private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro"};
     
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
@@ -387,8 +388,12 @@ public class DocumentProcessingService {
         // Detección de Bancor por patrones y contenido específico
         boolean bancorByContent = detectBancorByContent(textoExtraido);
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
+
+        boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
         
-       
+       if (isMacro) {
+            return com.bot.telegramdocreader.service.banks.Macro.parserMacro(textoExtraido, doc);
+       }
         
         if (isBancor) {
             

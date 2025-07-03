@@ -5,6 +5,7 @@ import org.telegram.telegrambots.meta.api.objects.Document;
 
 public class BancoProvincia {
     public static String formatBancoProvincia(TransferDTO transferencia) {
+        
         // Formato solicitado por el usuario
         String formato =  "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
         return String.format(formato,
