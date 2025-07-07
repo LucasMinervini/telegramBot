@@ -5,31 +5,23 @@ import org.telegram.telegrambots.meta.api.objects.Document;
 
 public class Uala {
     public static String formatUala(TransferDTO transferencia) {
-        String cuit = (transferencia.getCuit() != null && !transferencia.getCuit().isEmpty()) ? transferencia.getCuit() : "no hay cuit emisor";
-        String bancoReceptor;
-        // Si accountDestiny ya tiene el guion, usarlo directamente
-        if (transferencia.getAccountDestiny() != null && transferencia.getAccountDestiny().contains("-")) {
+        String titularCuenta = (transferencia.getName() != null && !transferencia.getName().isEmpty()) ? transferencia.getName() : "no detectado";
+        String bancoReceptor = "";
+        if (transferencia.getAccountDestiny() != null && !transferencia.getAccountDestiny().isEmpty()) {
             bancoReceptor = transferencia.getAccountDestiny();
-        } else if (transferencia.getName() != null && !transferencia.getName().isEmpty() && transferencia.getAccountDestiny() != null && !transferencia.getAccountDestiny().isEmpty()) {
-            bancoReceptor = transferencia.getName() + "-" + transferencia.getAccountDestiny();
-        } else if (transferencia.getAccountDestiny() != null && !transferencia.getAccountDestiny().isEmpty()) {
-            bancoReceptor = transferencia.getAccountDestiny();
-        } else if (transferencia.getBank() != null && !transferencia.getBank().isEmpty()) {
-            bancoReceptor = transferencia.getBank();
         } else {
             bancoReceptor = "No detectado";
         }
-
-        String formato = "Fecha: %s \n" +
+        String formato = "Fecha: %s\n" +
                 "Tipo de Operación: %s\n" +
-                "Cuit/Cuil: %s\n" +
+                "Titular Cuenta: %s\n" +
                 "Monto Bruto: $ %s\n" +
-                "Banco receptor: %s";
+                "Banco Receptor: %s";
         return String.format(formato,
-                transferencia.getDate() != null ? transferencia.getDate() : "",
-                transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
-                cuit,
-                transferencia.getAmount()!= null? transferencia.getAmount() : "",
+                transferencia.getDate(),
+                transferencia.getTypeOFTransfer(),
+                titularCuenta,
+                transferencia.getAmount(),
                 bancoReceptor);
     }
 
@@ -144,18 +136,31 @@ public class Uala {
         } else {
             accountDestiny = "";
         }
-        nameDestiny = cuentasDestino.size() > 0 ? cuentasDestino.get(0).trim() : "";
+        nameDestiny = "";
+        for (int i = 0; i < lines.length; i++) {
+            String lower = lines[i].toLowerCase().trim();
+            String original = lines[i].trim();
+            if (lower.contains("nombre remitente")) {
+                String value = original.replaceAll("(?i)nombre remitente", "").replace(":", "").trim();
+                if (!value.isEmpty()) {
+                    nameDestiny = value.replaceAll("\\s+", "");
+                    break;
+                }
+            }
+        }
 
         if (tipoOperacion.isEmpty()) tipoOperacion = "Transferencia";
-        return TransferDTO.builder()
-            .name(nameDestiny)
+        // Asignar siempre 'UALA' al campo bank para la detección
+        TransferDTO transferencia = TransferDTO.builder()
             .date(fecha)
-            .typeOFTransfer(tipoOperacion)
-            .cuit(cuit)
+            .typeOFTransfer(tipoOperacion.isEmpty() ? "Transferencia" : tipoOperacion)
+            .cuit(nameDestiny)
             .amount(monto)
-            .bank(accountDestiny)
-            .accountDestiny(accountDestiny)
+            .bank("UALA")
+            .accountDestiny(cuentaDestinoNombre)
+            .name(nameDestiny)
             .cbuDestiny(cbuDestiny)
             .build();
+        return transferencia;
     }
 }

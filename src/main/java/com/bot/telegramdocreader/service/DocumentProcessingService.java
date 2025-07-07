@@ -51,7 +51,7 @@ public class DocumentProcessingService {
     private static final String TELEGRAM_FILE_URL_TEMPLATE = "https://api.telegram.org/file/bot%s/%s";
     
     // Patrones de detección de bancos
-    private static final String[] UALA_PATTERNS = {"uala", "ualá"};
+    private static final String[] UALA_PATTERNS = {"uala", "ualá", "uála", "ualla", "uálá", "uála", "ualla", "ualla transferencia", "ualá transferencia", "uála transferencia", "u a l a", "u a l á", "uálá transferencia", "uála transferencia", "ualla trans", "ualá trans", "uála trans", "ualla recibo", "ualá recibo", "uála recibo", "ualla comprobante", "ualá comprobante", "uála comprobante", "transferencia ualá", "transferencia uala", "recibo ualá", "recibo uala", "comprobante ualá", "comprobante uala"};
     private static final String[] MERCADOPAGO_PATTERNS = {"mercadopago", "mpago", "mercado pago", "mercado_pago"};
     private static final String[] BANCOR_PATTERNS = {"bancor", "banco de córdoba", "banco córdoba", "cordoba", "córdoba"};
     private static final String[] PREX_PATTERNS = {"prex"};
@@ -427,9 +427,8 @@ public class DocumentProcessingService {
         boolean isUala = detectBank(textoExtraido, doc.getFileName(), UALA_PATTERNS);
         if (isUala) {
             TransferDTO ualaTransfer = Uala.parseUalaTransfer(textoExtraido, doc);
-            
-            if (ualaTransfer != null && ualaTransfer.getAccountDestiny() != null) {
-                ualaTransfer.setBank(ualaTransfer.getAccountDestiny());
+            if (ualaTransfer != null) {
+                ualaTransfer.setBank("UALA");
             }
             return ualaTransfer;
         }
@@ -903,7 +902,7 @@ private boolean detectBank(String texto, String fileName, String[] patterns) {
     }
     // Verificar en las primeras líneas del texto (más robusto para BBVA)
     String[] lines = texto.split("\\r?\\n");
-    for (int i = 0; i < Math.min(5, lines.length); i++) {
+    for (int i = 0; i < Math.min(10, lines.length); i++) { // Aumentar a 10 líneas para Ualá
         String lineNormalize = normalize.apply(lines[i].toLowerCase());
         for (String pattern : patterns) {
             String patternNorm = normalize.apply(pattern);
