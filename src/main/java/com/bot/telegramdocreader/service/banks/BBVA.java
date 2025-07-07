@@ -5,7 +5,7 @@ import org.telegram.telegrambots.meta.api.objects.Document;
 
 public class BBVA {
     public static String formatBBVA(TransferDTO transferencia) {
-        String formato = "Fecha: %s\nTipo de Operación: %s\nCuenta de origen: %s\nMonto Bruto: $ %s\nBanco receptor: %s";
+        String formato = "Fecha: %s\nTipo de Operación: %s\nTitular: %s\nMonto Bruto: $ %s\nBanco receptor: %s";
         return String.format(formato,
                 transferencia.getDate() != null ? transferencia.getDate() : "",
                 transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
@@ -20,7 +20,7 @@ public class BBVA {
         String tipoOperacion = "Transferencia";   
         String monto = "";
         String accountOrig = "";
-        String titularDestino = "";
+        String destiny = "";
         for (String line : lines) {
             String lower = line.toLowerCase().trim();
             // Fecha y hora
@@ -34,17 +34,18 @@ public class BBVA {
                 monto = line.replaceAll("[^0-9.,]", "").replaceFirst(",", ".");
             }
             // Cuenta de origen
-            if (accountOrig.isEmpty() && lower.contains("cuenta de origen")) {
-                accountOrig = line.replaceAll(".*? ", "").trim();
+            if (accountOrig.isEmpty() && lower.contains("titular")) {
+                accountOrig = line.replaceFirst("(?i)titular:?", "").trim();
             }
             // Destinatario
-            if (titularDestino.isEmpty() && lower.contains("destinatario")) {
-                titularDestino = line.replaceAll(".*destinatario:? ?", "").trim();
+            if (destiny.isEmpty() && lower.contains("destinatario")) {
+                destiny = line.replaceAll(".*destinatario:? ?", "").trim();
                 // Si el nombre tiene espacios, tomar solo el nombre (sin el prefijo)
-                if (titularDestino.toLowerCase().startsWith("destinatario ")) {
-                    titularDestino = titularDestino.substring(12).trim();
+                if (destiny.toLowerCase().startsWith("destinatario ")) {
+                    destiny = destiny.substring(12).trim();
                 }
             }
+
         }
         
 
@@ -55,7 +56,7 @@ public class BBVA {
                 .cuentaOrigen(accountOrig)
                 .amount(monto)
                 .bank("BBVA")
-                .name(titularDestino)
+                .name(destiny)
                 .build();
     }
 }
