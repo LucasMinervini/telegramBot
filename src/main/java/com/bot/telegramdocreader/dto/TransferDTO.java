@@ -11,6 +11,7 @@ import lombok.Data;
 public class TransferDTO {
     
     private String name;
+    private String cuentaOrigen;
     private String amount;
     private String cuit;
     private String date;

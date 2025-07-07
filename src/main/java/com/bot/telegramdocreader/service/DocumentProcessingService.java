@@ -15,6 +15,7 @@ import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
 import com.bot.telegramdocreader.service.banks.Prex;
 import com.bot.telegramdocreader.service.banks.Uala;
+import com.bot.telegramdocreader.service.banks.BBVA;
 import com.bot.telegramdocreader.service.banks.BancoProvincia;
 import com.bot.telegramdocreader.service.banks.Brubank;
 import com.bot.telegramdocreader.service.banks.MercadoPago;
@@ -55,10 +56,13 @@ public class DocumentProcessingService {
     private static final String[] BANCOR_PATTERNS = {"bancor", "banco de córdoba", "banco córdoba", "cordoba", "córdoba"};
     private static final String[] PREX_PATTERNS = {"prex"};
     private static final String[] PERSONAL_PAY_PATTERNS = {"personal pay", "personalpay"};
+    private static final String[] BBVA_PATTERNS = {"bbva", "b b v a", "banco bbva", "banco francés", "frances", "francés"};
     private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
     private static final String[] BRUBANK_PATTERNS = {"brubank"};
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro"};
+    private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
+    
     
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
@@ -130,6 +134,8 @@ public class DocumentProcessingService {
                             return BancoProvincia.formatBancoProvincia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
                             return Bancor.formatBancor(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BBVA")) {
+                            return BBVA.formatBBVA(transferencia);
                         } else {
                             String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                             return String.format(formatoBase,
@@ -245,23 +251,25 @@ public class DocumentProcessingService {
 
     
     // Archivos De Img Soportados
+    private static final String[] IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".gif", ".bmp", ".tiff", ".webp", ".svg"};
+    
     private boolean isImage(Document doc) {
         String fileName = doc.getFileName().toLowerCase();
         String mimeType = doc.getMimeType().toLowerCase();
     
         // Verificar por extensión de archivo
-        boolean isImageByExtension = fileName.endsWith(".jpg") || 
-                                   fileName.endsWith(".jpeg") || 
-                                   fileName.endsWith(".png") || 
-                                   fileName.endsWith(".heic") || 
-                                   fileName.endsWith(".gif") || 
-                                   fileName.endsWith(".bmp") ||
-                                   fileName.endsWith(".tiff"); 
+        boolean isImageByExtension = false;
+        for (String ext : IMAGE_EXTENSIONS) {
+            if (fileName.endsWith(ext)) {
+                isImageByExtension = true;
+                break;
+            }
+        }
     
         // Verificar por tipo MIME
         boolean isImageByMimeType = mimeType.startsWith("image/");
     
-        // Algunos clientes de Telegram envían imágenes como documentos con mimeType incorrecto (ej: application/octet-stream)
+        
         // Si la extensión es de imagen, considerar imagen aunque el mimeType no sea image/
         return isImageByExtension || isImageByMimeType;
     }
@@ -361,6 +369,8 @@ public class DocumentProcessingService {
     private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Booleanos para detectar el tipo de banco
         boolean esBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
+    
+        boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
         boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || textoExtraido.toLowerCase().contains("enviaste dinero");       
         boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS);
         boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
@@ -368,10 +378,13 @@ public class DocumentProcessingService {
         boolean bancorByContent = detectBancorByContent(textoExtraido);
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
-        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), new String[]{"galicia"});
+        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
 
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
+        }
+        if (isBBva) {
+            return com.bot.telegramdocreader.service.banks.BBVA.parseBBVATransfer(textoExtraido, doc);
         }
         
         if (isPersonalPay) {
@@ -881,26 +894,24 @@ private String extractCuitSender(String texto) {
 private boolean detectBank(String texto, String fileName, String[] patterns) {
     String textoLower = texto.toLowerCase();
     String fileNameLower = fileName.toLowerCase();
-    
+    java.util.function.Function<String, String> normalize = s -> s.replaceAll("[^a-záéíóúñ]", "");
     // Verificar en el nombre del archivo
     for (String pattern : patterns) {
-        if (fileNameLower.contains(pattern)) {
+        if (normalize.apply(fileNameLower).contains(normalize.apply(pattern))) {
             return true;
         }
     }
-    
-    // Verificar en las primeras líneas del texto
+    // Verificar en las primeras líneas del texto (más robusto para BBVA)
     String[] lines = texto.split("\\r?\\n");
-    for (int i = 0; i < Math.min(MAX_LINES_TO_CHECK, lines.length); i++) {
-        String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
+    for (int i = 0; i < Math.min(5, lines.length); i++) {
+        String lineNormalize = normalize.apply(lines[i].toLowerCase());
         for (String pattern : patterns) {
-            if (lineNormalize.contains(pattern) || 
-                containsApproxWord(lineNormalize, pattern, 1)) {
+            String patternNorm = normalize.apply(pattern);
+            if (lineNormalize.contains(patternNorm) || containsApproxWord(lineNormalize, patternNorm, 1)) {
                 return true;
             }
         }
     }
-    
     // Verificar en todo el texto con regex
     for (String pattern : patterns) {
         if (textoLower.matches("(?i).*\\b" + pattern.replace(" ", "\\s*") + "\\b.*")) {
@@ -923,5 +934,33 @@ private boolean detectBancorByContent(String texto) {
            textoLower.contains("datos destino") &&
            textoLower.contains("identificador de la transferencia") &&
            textoLower.contains("cód. transacción");
+}
+    
+
+private boolean detectBBVA(String texto, String fileName) {
+    String textoLower = texto.toLowerCase();
+    String fileNameLower = fileName.toLowerCase();
+    int countBBVA = 0;
+    int idx = textoLower.indexOf("bbva");
+    while (idx != -1) {
+        countBBVA++;
+        idx = textoLower.indexOf("bbva", idx + 1);
+    }
+    idx = fileNameLower.indexOf("bbva");
+    while (idx != -1) {
+        countBBVA++;
+        idx = fileNameLower.indexOf("bbva", idx + 1);
+    }
+    boolean keywords = textoLower.contains("transferencia") || textoLower.contains("comprobante") || textoLower.contains("cuenta de origen") || textoLower.contains("cbu") || textoLower.contains("alias");
+    // Detección directa por frase característica
+    if (textoLower.contains("bbva móvil") || textoLower.contains("esta operación se realizó en bbva")) {
+        return true;
+    }
+    // Si aparece 'bbva' al menos dos veces, lo detecta sin requerir keywords
+    if (countBBVA >= 2) {
+        return true;
+    }
+    // Para variantes menos comunes, requiere keywords
+    return (textoLower.contains("banco francés") || textoLower.contains("francés") || textoLower.contains("frances")) && keywords;
 }
     }

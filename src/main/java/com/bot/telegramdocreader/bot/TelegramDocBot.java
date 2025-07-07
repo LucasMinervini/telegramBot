@@ -72,27 +72,52 @@ public class TelegramDocBot extends TelegramLongPollingBot {
     }
 
     @Override
-public void onUpdateReceived(Update update) {
-    if (update.hasMessage()) {
-        Message message = update.getMessage();
-        Long chatId = message.getChatId();
+    public void onUpdateReceived(Update update) {
+        if (update.hasMessage()) {
+            Message message = update.getMessage();
+            Long chatId = message.getChatId();
 
-        if (message.hasText() && message.getText().equals("/start")) {
-            ClientsDTO client = mapClient.computeIfAbsent(chatId, id ->
-            ClientsDTO.builder()
-            .chatId(id)
-            .name(message.getFrom().getFirstName()) 
-            .build()
-            );
-
-            sendTextMessage(chatId, "¡Hola " + client.getName() + "! 👋 Ya estás listo para enviar comprobantes. Mandame una imagen o PDF para procesar.");
-        } else if (message.hasDocument()) {
-            handleDocumentMessage(update); 
+            if (message.hasText() && message.getText().equals("/start")) {
+                ClientsDTO client = mapClient.computeIfAbsent(chatId, id ->
+                    ClientsDTO.builder()
+                        .chatId(id)
+                        .name(message.getFrom().getFirstName())
+                        .build()
+                );
+                sendTextMessage(chatId, "¡Hola " + client.getName() + "! 👋 Ya estás listo para enviar comprobantes. Mandame una imagen o PDF para procesar.");
+            } else if (message.hasDocument()) {
+                handleDocumentMessage(update);
+            } else if (message.hasPhoto()) {
+                handlePhotoMessage(message);
+            }
+        } else if (update.hasCallbackQuery()) {
+            handleCallbackQuery(update);
         }
-    } else if (update.hasCallbackQuery()) {
-        handleCallbackQuery(update);
     }
-}
+
+    private void handlePhotoMessage(Message message) {
+        Long chatId = message.getChatId();
+        String botToken = getBotToken();
+        try {
+            // Obtener la foto de mayor resolución
+            List<org.telegram.telegrambots.meta.api.objects.PhotoSize> photos = message.getPhoto();
+            org.telegram.telegrambots.meta.api.objects.PhotoSize largestPhoto = photos.get(photos.size() - 1);
+            String fileId = largestPhoto.getFileId();
+            // Descargar el archivo usando TelegramFileService
+            java.io.File photoFile = telegramFileService.downloadFileByFileId(fileId, botToken);
+            // Crear un objeto Document simulado para reutilizar el flujo de procesamiento
+            org.telegram.telegrambots.meta.api.objects.Document fakeDoc = new org.telegram.telegrambots.meta.api.objects.Document();
+            fakeDoc.setFileId(fileId);
+            fakeDoc.setFileName("foto_telegram.jpg");
+            fakeDoc.setMimeType("image/jpeg");
+            // Procesar como documento
+            String result = documentProcessingService.processDocument(fakeDoc, botToken, chatId);
+            sendTextMessage(chatId, result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            sendTextMessage(chatId, "Error al procesar la imagen enviada como foto.");
+        }
+    }
 
     private void handleDocumentMessage(Update update) {
         Document doc = update.getMessage().getDocument();
@@ -116,7 +141,9 @@ public void onUpdateReceived(Update update) {
             saveButton.setText("Guardar Excel");
             saveButton.setCallbackData("save_excel");
 
-            InlineKeyboardButton driveButton = new InlineKeyboardButton();
+            //BOTON DE DRIVE 
+
+           /*  InlineKeyboardButton driveButton = new InlineKeyboardButton();
             driveButton.setText("Guardar en Drive");
             driveButton.setCallbackData("save_to_drive");
 
@@ -125,6 +152,15 @@ public void onUpdateReceived(Update update) {
             rowInline.add(driveButton);
             rowsInline.add(rowInline);
             markupInline.setKeyboard(rowsInline);
+             */
+
+            // Solución: agregar los botones download y save aunque el de Drive esté comentado
+            rowInline.add(downloadButton);
+            rowInline.add(saveButton);
+            rowsInline.add(rowInline);
+            markupInline.setKeyboard(rowsInline);
+
+
 
             // Enviar mensaje con los botones
             SendMessage response = new SendMessage();
