@@ -152,6 +152,7 @@ public class DocumentProcessingService {
                 } else {
                     // Si el texto extraído contiene Banco Provincia, intenta forzar el parseo y formateo
                     if (textoExtraido.toLowerCase().contains("banco provincia") || textoExtraido.toLowerCase().contains("provincia")) {
+                        System.out.println("Texto extraído (Banco Provincia):\n" + textoExtraido);
                         TransferDTO transferenciaForzada = BancoProvincia.parseBancoProvinciaTransfer(textoExtraido, doc);
                         if (transferenciaForzada != null) {
                             return BancoProvincia.formatBancoProvincia(transferenciaForzada);

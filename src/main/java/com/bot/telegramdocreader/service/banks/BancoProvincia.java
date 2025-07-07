@@ -7,7 +7,7 @@ public class BancoProvincia {
     public static String formatBancoProvincia(TransferDTO transferencia) {
         // Formato solicitado por el usuario
         String formato =  "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
-        String bancoReceptor = transferencia.getTitularCuentaDestino() != null && !transferencia.getTitularCuentaDestino().isEmpty() ? transferencia.getTitularCuentaDestino() : "-";
+        String bancoReceptor = transferencia.getTitularCuentaDestino() != null && !transferencia.getTitularCuentaDestino().isEmpty() ? extraerNombreBanco(transferencia.getTitularCuentaDestino()) : "-";
         String tipoOperacion = transferencia.getTypeOFTransfer() != null && (transferencia.getTypeOFTransfer().equalsIgnoreCase("debito") || transferencia.getTypeOFTransfer().equalsIgnoreCase("transferencia")) ? transferencia.getTypeOFTransfer() : "transferencia";
         return String.format(formato,
                 transferencia.getDate() != null ? transferencia.getDate() : "-",
@@ -71,7 +71,7 @@ public class BancoProvincia {
                 tipoOperacion = "deposito";
             }
             if (lower.contains("titular cuenta destino") && titularCuentaDestino.isEmpty()) {
-                String value = original.replaceAll("(?i)titular cuenta destino:", "").trim();
+                String value = original.replaceAll("(?i)titular cuenta destino:?", "").trim();
                 if (!value.isEmpty()) titularCuentaDestino = value;
             }
         }
@@ -108,14 +108,35 @@ public class BancoProvincia {
             java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\s*([0-9.,]+)").matcher(textoExtraido);
             if (matcher.find()) monto = matcher.group(1);
         }
+
+        System.out.println(textoExtraido);
         // Si no se encontró ningún dato, igual devolver el formato con guiones
         return TransferDTO.builder()
                 .date(fecha)
                 .typeOFTransfer(tipoOperacion)
                 .cuit(cuit)
                 .amount(monto)
-                .bank(titularCuentaDestino)
+                .bank(extraerNombreBanco(titularCuentaDestino))
                 .titularCuentaDestino(titularCuentaDestino)
                 .build();
     }
+
+private static String capitalizeWords(String str) {
+    if (str == null || str.isEmpty()) return str;
+    String[] words = str.toLowerCase().split(" ");
+    StringBuilder sb = new StringBuilder();
+    for (String word : words) {
+        if (!word.isEmpty()) {
+            sb.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1)).append(" ");
+        }
+    }
+    return sb.toString().trim();
+}
+
+// Agregar función auxiliar para extraer solo el nombre
+private static String extraerNombreBanco(String str) {
+    if (str == null || str.isEmpty()) return str;
+    String nombre = str.split("/")[0].trim();
+    return capitalizeWords(nombre);
+}
 }
