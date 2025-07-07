@@ -83,7 +83,7 @@ public class Uala {
             
             // Monto debitado (más flexible)
             if ((lower.contains("monto debitado") || lower.startsWith("monto")) && monto.isEmpty()) {
-                String value = original.replaceAll("(?i)monto debitado", "").replaceAll("(?i)monto", "").replace(":", "").replace("$", "").replace(",", ".").trim();
+                String value = original.replaceAll("(?i)monto debitado", "").replaceAll("(?i)monto", "").replace(":", "").replace("$", "").replace(",", ",").trim();
                 if (value.isEmpty() || isField.test(value)) {
                     if (i + 1 < lines.length && !isField.test(lines[i + 1].replace("$", "").trim())) value = lines[i + 1].replace("$", "").replace(",", ".").trim();
                 }
