@@ -93,8 +93,72 @@ public class DocumentProcessingService {
                 instance.setPageSegMode(1);
                 instance.setOcrEngineMode(1);
                 textoExtraido = instance.doOCR(image);
+
+
                 // --- INICIO LOG UALA ---
                 boolean isUala = detectBank(textoExtraido, doc.getFileName(), UALA_PATTERNS);
+                
+                // --- INICIO LOG MERCADO PAGO (igual que PDF, pero más tolerante para OCR de imágenes) ---
+                boolean isMercadoPago = false;
+                String[] lines = textoExtraido.split("\r?\n");
+                // 1. Detección clásica en primeras 10 líneas
+                for (int i = 0; i < Math.min(10, lines.length); i++) {
+                    String lineNormalize = lines[i].replaceAll("[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ]", "").toLowerCase();
+                    if (lineNormalize.contains("mercadopago") || lineNormalize.contains("mpago") || lineNormalize.contains("mercado pago") || containsApproxWord(lineNormalize, "mercadopago", 2) || containsApproxWord(lineNormalize, "mercado pago", 2)) {
+                        isMercadoPago = true;
+                        break;
+                    }
+                }
+                // 2. Detección por nombre de archivo
+                if (!isMercadoPago) {
+                    String fileNameLower = doc.getFileName().toLowerCase();
+                    if (fileNameLower.contains("mercadopago") || fileNameLower.contains("mpago") || fileNameLower.contains("mercado pago")) {
+                        isMercadoPago = true;
+                    }
+                }
+                // 3. Detección por regex en todo el texto (multilínea)
+                if (!isMercadoPago) {
+                    // Permite saltos de línea y espacios entre 'mercado' y 'pago'
+                    Pattern mpMulti = Pattern.compile("(?i)m\\s*e\\s*r\\s*c\\s*a\\s*d\\s*o[\\n\\r\\s\\-_:.,]*p\\s*a\\s*g\\s*o");
+                    Matcher matcher = mpMulti.matcher(textoExtraido);
+                    if (matcher.find()) {
+                        isMercadoPago = true;
+                    }
+                }
+                // 4. Detección por líneas separadas ("mercado" y "pago" en líneas distintas cercanas)
+                if (!isMercadoPago) {
+                    for (int i = 0; i < lines.length - 1; i++) {
+                        String l1 = lines[i].toLowerCase();
+                        String l2 = lines[i + 1].toLowerCase();
+                        if ((l1.contains("mercado") && l2.contains("pago")) || (l2.contains("mercado") && l1.contains("pago"))) {
+                            isMercadoPago = true;
+                            break;
+                        }
+                    }
+                }
+                // 5. Detección por regex simple (por si acaso)
+                if (!isMercadoPago && textoExtraido.matches("(?i).*\\bmercado\\s*pago\\b.*")) {
+                    isMercadoPago = true;
+                }
+                if (isMercadoPago) {
+                    TransferDTO transferenciaMP = MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
+                    if (transferenciaMP != null) {
+                        lastTransfer = transferenciaMP;
+                        telegramFileService.createExcelFile(transferenciaMP);
+                        try {
+                            String excelResult = ExportExcel.exportTransferToExcel(transferenciaMP);
+                            if (excelResult.startsWith("Error")) {
+                                System.out.println("Error al generar el archivo Excel: " + excelResult);
+                                return "Error al generar el archivo Excel: " + excelResult;
+                            }
+                            return MercadoPago.formatMercadoPago(transferenciaMP);
+                        } catch (IOException e) {
+                            System.out.println("Error al generar el archivo Excel: " + e.getMessage());
+                            return "Error al generar el archivo Excel: " + e.getMessage();
+                        }
+                    }
+                }
+                // --- FIN LOG MERCADO PAGO ---
                 TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
                 if (isUala && transferencia != null) {
                     lastTransfer = transferencia;
@@ -645,8 +709,8 @@ public class DocumentProcessingService {
                 } else if (lower.contains("banco") || lower.contains("entidad")) {
                     bankReceiver = original.replaceAll("(?i)|banco:|entidad:|destino:", "").trim();
                 } 
-                else if (lower.contains("para") || lower.contains("destinatario") || lower.contains("beneficiario")) {
-                    String posibleBanco = original.replaceAll("(?i)para:|destinatario:|beneficiario:", "").trim();
+                else if (lower.contains("para") || lower.contains("pera") || lower.contains("destinatario") || lower.contains("beneficiario") || containsApproxWord(lower, "para", 1)) {
+                    String posibleBanco = original.replaceAll("(?i)para:|pera:|destinatario:|beneficiario:", "").trim();
                     if (!posibleBanco.isEmpty() && bankReceiver.isEmpty()) {
                         bankReceiver = posibleBanco;
                     }
@@ -711,8 +775,8 @@ public class DocumentProcessingService {
                 if (lower.contains("neblockchain") || lower.contains("neblockchain sa")) {
                     bankReceiver = "NEBLOCKCHAIN SA";
                     continue;
-                } else if (lower.contains("para") || lower.contains("destinatario") || lower.contains("beneficiario")) {
-                    String posibleBanco = original.replaceAll("(?i)para:|destinatario:|beneficiario:", "").trim();
+                } else if (lower.contains("para") || lower.contains("pera") || lower.contains("destinatario") || lower.contains("beneficiario") || containsApproxWord(lower, "para", 1)) {
+                    String posibleBanco = original.replaceAll("(?i)para:|pera:|destinatario:|beneficiario:", "").trim();
                     if (!posibleBanco.isEmpty() && bankReceiver.isEmpty()) {
                         bankReceiver = posibleBanco;
                     }
@@ -804,9 +868,8 @@ public class DocumentProcessingService {
                 if (partes.length == 3) {
                     partes[0] = partes[0].length() == 1 ? "0" + partes[0] : partes[0];
                     partes[1] = partes[1].length() == 1 ? "0" + partes[1] : partes[1];
-                    fecha = String.format("/", partes);
+                    fecha = String.join("/", partes);
                 }
-                
                 return fecha;
             }
         }

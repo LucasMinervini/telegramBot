@@ -49,7 +49,7 @@ public class MercadoPagoConfig {
     
     // Secciones del documento
     public static final String SECTION_FROM = "de";
-    public static final String SECTION_TO = "para";
+    public static final String[] SECTION_TO = { "para", "pera", "Para", "Pera" };
     public static final String SECTION_BANK = "banco receptor";
     
     // Longitud esperada del CUIT

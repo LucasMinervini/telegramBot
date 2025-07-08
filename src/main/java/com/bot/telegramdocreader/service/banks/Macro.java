@@ -42,7 +42,7 @@ public static TransferDTO parserMacro(String textoExtraido, Document doc) {
                 if (matcher.find()) fecha = matcher.group(1);
             }
         }
-        // Tipo de operación: siempre "Transferencia"
+        
         // CUIT/CUIL/CDI: buscar línea que contenga "CUIT/CUIL/CDI" y extraer el valor
         if (cuit.isEmpty() && lower.contains("cuit/cuil/cdi")) {
             String value = original.replaceAll("(?i)CUIT/CUIL/CDI:?", "").replaceAll("[^0-9-]", "").trim();

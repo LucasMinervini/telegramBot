@@ -8,15 +8,7 @@ import org.slf4j.LoggerFactory;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/**
- * Parser para documentos de transferencia de Mercado Pago
- * 
- * Formato esperado del documento:
- * - Sección "De" contiene información del emisor (nombre y CUIT/CUIL)
- * - Sección "Para" contiene información del receptor (nombre, CUIT/CUIL, banco)
- * - Monto aparece con formato $ XXX.XXX
- * - Fecha puede estar en formato largo o corto
- */
+
 public class MercadoPago {
     private static final Logger logger = LoggerFactory.getLogger(MercadoPago.class);
     
@@ -28,7 +20,7 @@ public class MercadoPago {
     public static String formatMercadoPago(TransferDTO transferencia) {
         String cuit = (transferencia.getCuit() != null && !transferencia.getCuit().isEmpty()) ? transferencia.getCuit() : "no hay cuit emisor";
         String titular = (transferencia.getName() != null && !transferencia.getName().isEmpty()) ? transferencia.getName() : "no detectado";
-        String formato = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil Emisor: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
+        String formato = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
         return String.format(formato,
                 transferencia.getDate() != null ? transferencia.getDate() : "",
                 transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
@@ -52,6 +44,7 @@ public class MercadoPago {
         String titular = "";
         String bancoReceptor = "";
         boolean foundPara = false;
+        int paraIndex = -1;
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();
             String original = lines[i].trim();
@@ -101,8 +94,9 @@ public class MercadoPago {
                 if (matcher.find()) cuitEmisor = matcher.group(1);
             }
             // Titular receptor: buscar después de 'Para'
-            if (lower.startsWith("para")) {
+            if (lower.startsWith("para") || lower.contains("pera")) {
                 foundPara = true;
+                paraIndex = i;
                 continue;
             }
             if (foundPara && titular.isEmpty() && !lower.isEmpty() && !lower.contains("cuit") && !lower.contains("cvu") && !lower.contains("neblockchain") && !lower.contains("número de operación") && !lower.contains("codigo de identificacion")) {
@@ -113,6 +107,17 @@ public class MercadoPago {
             if ((lower.contains("titular") || lower.contains("nombre") || lower.contains("a nombre de")) && titular.isEmpty()) {
                 String value = original.replaceAll("(?i)titular|nombre|a nombre de", "").replace(":", "").trim();
                 if (!value.isEmpty()) titular = value;
+            }
+        }
+        // Si no se encontró el titular, buscar entre las siguientes 3 líneas después de 'Para'
+        if (titular.isEmpty() && paraIndex != -1) {
+            for (int j = paraIndex + 1; j < Math.min(lines.length, paraIndex + 4); j++) {
+                String lower = lines[j].toLowerCase().trim();
+                String original = lines[j].trim();
+                if (!lower.isEmpty() && !lower.contains("cuit") && !lower.contains("cvu") && !lower.contains("neblockchain") && !lower.contains("número de operación") && !lower.contains("codigo de identificacion")) {
+                    titular = original;
+                    break;
+                }
             }
         }
         bancoReceptor = extractBancoReceptor(lines);
@@ -127,17 +132,35 @@ public class MercadoPago {
     }
 
     /**
-     * Encuentra la línea donde comienza la sección 'Para' (receptor)
+     * Encuentra la línea donde comienza la sección 'Para' (receptor), tolerante a OCR (ej: 'Pera')
      */
     private static int findParaSection(String[] lines) {
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();
-            if (lower.startsWith(MercadoPagoConfig.SECTION_TO)) {
+            if (startsWithAny(lower, MercadoPagoConfig.SECTION_TO) || lower.startsWith("pera") || containsApproxWord(lower, "para", 1)) {
                 logger.debug(MercadoPagoConfig.LOG_SECTION_FOUND, MercadoPagoConfig.SECTION_TO, i);
                 return i;
             }
         }
         return -1;
+    }
+
+    // Utilidad para coincidencia aproximada (Levenshtein)
+    private static boolean containsApproxWord(String text, String target, int tolerance) {
+        text = text.toLowerCase();
+        target = target.toLowerCase();
+        int distance = org.apache.commons.lang3.StringUtils.getLevenshteinDistance(text, target);
+        return distance <= tolerance;
+    }
+
+    // Devuelve true si el texto comienza con alguno de los prefijos dados
+    private static boolean startsWithAny(String text, String[] prefixes) {
+        for (String prefix : prefixes) {
+            if (text.startsWith(prefix.toLowerCase())) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**
@@ -392,9 +415,7 @@ public class MercadoPago {
          return "";
      }
     
-    /**
-     * Extrae el titular receptor
-     */
+   
     private static String extractTitular(String[] lines, int indicePara) {
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();

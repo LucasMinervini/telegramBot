@@ -19,6 +19,9 @@ public class TransferDTO {
     private String typeOFTransfer;
     private String accountDestiny;    
     private String cbuDestiny;       
+
+
+    
     // Nuevos campos para Banco Provincia
     private String transactionNumber;
     private String accountToDebit;
