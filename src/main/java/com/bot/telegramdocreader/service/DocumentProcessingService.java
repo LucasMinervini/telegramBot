@@ -79,6 +79,7 @@ public class DocumentProcessingService {
     // Este método se encarga de procesar el documento recibido por el bot
     public String processDocument(Document doc, String botToken, Long chatId) throws Exception {
         String textoExtraido;
+        
         boolean isPdfFormat = isPdf(doc);
         try {
             
@@ -93,6 +94,7 @@ public class DocumentProcessingService {
                 instance.setPageSegMode(1);
                 instance.setOcrEngineMode(1);
                 textoExtraido = instance.doOCR(image);
+                System.out.println(textoExtraido);
 
 
                 // --- INICIO LOG UALA ---
@@ -198,6 +200,8 @@ public class DocumentProcessingService {
                             return BancoProvincia.formatBancoProvincia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
                             return Bancor.formatBancor(transferencia);
+                        } else if (com.bot.telegramdocreader.service.banks.CuentaDni.class.getSimpleName().equals(transferencia.getClass().getSimpleName()) || (transferencia.getTypeOFTransfer() != null && transferencia.getTypeOFTransfer().equalsIgnoreCase("Transferencia") && transferencia.getCuentaOrigen() != null && !transferencia.getCuentaOrigen().isEmpty() && transferencia.getBank() != null && !transferencia.getBank().isEmpty() && transferencia.getDate() != null && !transferencia.getDate().isEmpty())) {
+                            return com.bot.telegramdocreader.service.banks.CuentaDni.formatCuentaDni(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BBVA")) {
                             return BBVA.formatBBVA(transferencia);
                         } else {
@@ -213,7 +217,9 @@ public class DocumentProcessingService {
                         System.out.println("Error al generar el archivo Excel: " + e.getMessage());
                         return "Error al generar el archivo Excel: " + e.getMessage();
                     }
-                } else {
+                }
+               
+ else {
                     // Si el texto extraído contiene Banco Provincia, intenta forzar el parseo y formateo
                     if (textoExtraido.toLowerCase().contains("banco provincia") || textoExtraido.toLowerCase().contains("provincia")) {
                         System.out.println("Texto extraído (Banco Provincia):\n" + textoExtraido);
@@ -222,7 +228,9 @@ public class DocumentProcessingService {
                             return BancoProvincia.formatBancoProvincia(transferenciaForzada);
                         }
                     }
+                    
                     return textoExtraido;
+                    
                 }
             } else if (isPdf(doc)) {
                 textoExtraido = extractTextFromPdf(doc, botToken);
@@ -267,6 +275,7 @@ public class DocumentProcessingService {
                     }
                 }
                 TransferDTO transferencia = mapperTransf(textoExtraido, true, doc);
+                
                 if (transferencia != null) {
                     lastTransfer = transferencia;
                     telegramFileService.createExcelFile(transferencia);
@@ -311,9 +320,10 @@ public class DocumentProcessingService {
             e.printStackTrace();
             return "Error en el procesamiento del documento: " + e.getMessage();
         }
+        
+
     }
     
-
     
     // Archivos De Img Soportados
     private static final String[] IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".heic", ".gif", ".bmp", ".tiff", ".webp", ".svg"};
@@ -434,9 +444,9 @@ public class DocumentProcessingService {
     private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Booleanos para detectar el tipo de banco
         boolean esBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
-    
+
         boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
-        boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || textoExtraido.toLowerCase().contains("enviaste dinero");       
+        boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || textoExtraido.toLowerCase().contains("enviaste dinero");
         boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS) || textoExtraido.toLowerCase().contains("mercadopago") || textoExtraido.toLowerCase().contains("mercado pago") || textoExtraido.toLowerCase().contains("mpago");
         boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
         boolean isBankProvincia = detectBank(textoExtraido, doc.getFileName(), BANCO_PROVINCIA_PATTERNS) || textoExtraido.toLowerCase().contains("nueva transferencia");
@@ -444,6 +454,23 @@ public class DocumentProcessingService {
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
+        boolean isCuentaDni = false;
+        // Detectar Cuenta DNI por patrones característicos (más robusto)
+        String textoLower = textoExtraido.toLowerCase();
+        // Debe contener "comprobante de transferencia", "origen", "para", "importe" y un monto con $ y una fecha
+        boolean tieneComprobante = textoLower.contains("comprobante de transferencia");
+        boolean tieneOrigen = textoLower.contains("origen");
+        boolean tienePara = textoLower.contains("para");
+        boolean tieneImporte = textoLower.contains("importe");
+        boolean tieneMonto = textoLower.matches("(?s).*[\\r\\n]\\s*\\$ ?[0-9.]+,[0-9]{2}.*");
+        boolean tieneFecha = textoLower.matches("(?s).*[\\r\\n]\\s*\\d{2}/\\d{2}/\\d{4}.*");
+        if ((textoLower.contains("cuenta dni") && tieneComprobante && tieneOrigen && tienePara && tieneImporte) ||
+            (tieneComprobante && tieneOrigen && tienePara && tieneImporte && tieneMonto && tieneFecha)) {
+            isCuentaDni = true;
+        }
+        if (isCuentaDni) {
+            return com.bot.telegramdocreader.service.banks.CuentaDni.parseCuentaDniTransfer(textoExtraido, doc);
+        }
 
         if (esBrubank) {
             return Brubank.parseBrubankTransfer(textoExtraido, doc);
@@ -526,9 +553,7 @@ public class DocumentProcessingService {
             }
         }
 
-        // NUEVO: Si se detectan los datos clave, devolver formato base aunque no se reconozca banco
-        boolean tieneFecha = !fecha.isEmpty() || textoCompleto.matches(".*\\d{2}/\\d{2}/\\d{4}.*");
-        boolean tieneMonto = textoCompleto.contains("$") || textoCompleto.matches(".*\\d{1,3}(\\.\\d{3})*,\\d{2}.*");
+       
         boolean tieneCuit = textoCompleto.contains("cuit") || textoCompleto.matches(".*\\d{2}-\\d{8}-\\d{1}.*");
         if (tieneFecha && tieneMonto && tieneCuit) {
             // Extraer valores si están vacíos
