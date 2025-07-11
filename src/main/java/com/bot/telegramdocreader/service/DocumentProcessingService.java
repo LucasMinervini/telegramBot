@@ -14,6 +14,7 @@ import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import com.bot.telegramdocreader.bot.TelegramDocBot;
 import com.bot.telegramdocreader.dto.TransferDTO;
 import com.bot.telegramdocreader.service.banks.Prex;
+import com.bot.telegramdocreader.service.banks.Santander;
 import com.bot.telegramdocreader.service.banks.Uala;
 import com.bot.telegramdocreader.service.banks.BBVA;
 import com.bot.telegramdocreader.service.banks.BancoProvincia;
@@ -40,6 +41,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.telegram.telegrambots.meta.api.objects.Message;
 
 import com.bot.telegramdocreader.service.banks.Galicia;
+import com.bot.telegramdocreader.service.banks.Macro;
 
 @Service
 public class DocumentProcessingService {
@@ -62,6 +64,7 @@ public class DocumentProcessingService {
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro"};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
+    private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
     
     
     // Declarar el bot como un campo privado
@@ -204,7 +207,17 @@ public class DocumentProcessingService {
                             return com.bot.telegramdocreader.service.banks.CuentaDni.formatCuentaDni(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BBVA")) {
                             return BBVA.formatBBVA(transferencia);
-                        } else {
+                        } else if(transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("NARANJAX")) {
+                            return NaranjaX.formatNaranjaX(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("GALICIA")) {
+                            return Galicia.formatGalicia(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("SANTANDER")) {
+                            return Santander.formatSantander(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("MACRO")) {
+                            return Macro.formatMacro(transferencia);
+                        }
+                        
+                        else {
                             String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                             return String.format(formatoBase,
                                 transferencia.getDate(),
@@ -294,9 +307,21 @@ public class DocumentProcessingService {
                             return Brubank.formatBrubank(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
                             return BancoProvincia.formatBancoProvincia(transferencia);
-                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) 
+                        {
                             return Bancor.formatBancor(transferencia);
-                        } else {
+                        } else if(transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BBVA")) {
+                            return BBVA.formatBBVA(transferencia);
+                        } else if (com.bot.telegramdocreader.service.banks.CuentaDni.class.getSimpleName().equals(transferencia.getClass().getSimpleName()) || (transferencia.getTypeOFTransfer() != null && transferencia.getTypeOFTransfer().equalsIgnoreCase("Transferencia") && transferencia.getCuentaOrigen() != null && !transferencia.getCuentaOrigen().isEmpty() && transferencia.getBank() != null && !transferencia.getBank().isEmpty() && transferencia.getDate() != null && !transferencia.getDate().isEmpty())) {
+                            return com.bot.telegramdocreader.service.banks.CuentaDni.formatCuentaDni(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("NARANJAX")) {
+                            return NaranjaX.formatNaranjaX(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("GALICIA")) {
+                            return Galicia.formatGalicia(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("SANTANDER")) {
+                            return Santander.formatSantander(transferencia);
+                        }
+                        else {
                             String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
                             return String.format(formatoBase,
                                 transferencia.getDate(),
@@ -454,6 +479,8 @@ public class DocumentProcessingService {
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
+        
+        boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
         boolean isCuentaDni = false;
         // Detectar Cuenta DNI por patrones característicos (más robusto)
         String textoLower = textoExtraido.toLowerCase();
@@ -511,6 +538,9 @@ public class DocumentProcessingService {
         
         if (isBankProvincia) {
             return com.bot.telegramdocreader.service.banks.BancoProvincia.parseBancoProvinciaTransfer(textoExtraido, doc);
+        }
+        if(isSantander) {
+            return com.bot.telegramdocreader.service.banks.Santander.parseSantanderTransfer(textoExtraido, doc);
         }
         // Detectar si es transferencia de PREX
         boolean isPrex = false;
