@@ -93,8 +93,8 @@ public class MercadoPago {
                 java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}-\\d{8}-\\d{1})").matcher(original);
                 if (matcher.find()) cuitEmisor = matcher.group(1);
             }
-            // Titular receptor: buscar después de 'Para'
-            if (lower.startsWith("para") || lower.contains("pera")) {
+            
+            if (lower.matches("^[^a-zA-Z0-9]*para(\\s|:|$)") || lower.matches("^[^a-zA-Z0-9]*pera(\\s|:|$)")) {
                 foundPara = true;
                 paraIndex = i;
                 continue;
