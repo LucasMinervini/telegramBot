@@ -50,7 +50,9 @@ public class MercadoPago {
             String original = lines[i].trim();
             // Fecha (buscar línea con día de la semana y fecha larga)
             if (fecha.isEmpty() && lower.matches("^(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)[,\\s].*\\d{4}.*")) {
-                fecha = original.replaceAll("\\s+a\\s+las.*", "").replaceAll(",", "").trim();
+                String fechaTexto = original.replaceAll("\\s+a\\s+las.*", "").replaceAll(",", "").trim();
+                String fechaConvertida = convertirFechaTextoANumerico(fechaTexto);
+                fecha = !fechaConvertida.isEmpty() ? fechaConvertida : fechaTexto;
             }
             // Fecha (fallback)
             if ((lower.contains("fecha de operación") || lower.contains("fecha de operacion") || lower.startsWith("fecha")) && fecha.isEmpty()) {
