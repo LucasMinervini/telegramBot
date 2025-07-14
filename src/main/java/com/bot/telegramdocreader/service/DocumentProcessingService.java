@@ -66,6 +66,7 @@ public class DocumentProcessingService {
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro"};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
     private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
+    private static final String[] SANTANDER_FALLBACK_PATTERNS = {"Comprobante de transferencia", "CTA"};
     private static final String[] CUENTA_DNI_PATTERNS = {"cuenta dni", "cuentadni"};
     private static final String[] CUENTA_DNI_FALLBACK_PATTERNS = {"código de referencia", "comprobante de transferencia"};
     
@@ -111,6 +112,16 @@ public class DocumentProcessingService {
                 textoExtraido = instance.doOCR(image);
                 System.out.println(textoExtraido);
 
+
+                boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS) || detectAllBanks(textoExtraido, SANTANDER_FALLBACK_PATTERNS);
+                if (isSantander) {
+                    TransferDTO transferenciaSantander = Santander.parseSantanderTransfer(textoExtraido, doc);
+                    if (transferenciaSantander != null) {
+                        lastTransfer = transferenciaSantander;
+                        telegramFileService.createExcelFile(transferenciaSantander);
+                        return Santander.formatSantander(transferenciaSantander);
+                    }
+                }
 
                 boolean isCuentaDni = detectBank(textoExtraido, doc.getFileName(), CUENTA_DNI_PATTERNS) || detectAllBanks(textoExtraido, CUENTA_DNI_FALLBACK_PATTERNS);
                 if (isCuentaDni) {
