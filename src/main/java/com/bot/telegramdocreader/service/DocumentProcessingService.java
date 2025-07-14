@@ -22,6 +22,7 @@ import com.bot.telegramdocreader.service.banks.Brubank;
 import com.bot.telegramdocreader.service.banks.MercadoPago;
 import com.bot.telegramdocreader.service.banks.Bancor;
 import com.bot.telegramdocreader.service.banks.NaranjaX;
+import com.bot.telegramdocreader.service.banks.CuentaDni;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -65,6 +66,8 @@ public class DocumentProcessingService {
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro"};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
     private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
+    private static final String[] CUENTA_DNI_PATTERNS = {"cuenta dni", "cuentadni"};
+    private static final String[] CUENTA_DNI_FALLBACK_PATTERNS = {"código de referencia", "comprobante de transferencia"};
     
     
     // Declarar el bot como un campo privado
@@ -77,6 +80,15 @@ public class DocumentProcessingService {
     public DocumentProcessingService(TelegramDocBot bot, TelegramFileService telegramFileService) {
         this.bot = bot;
         this.telegramFileService = telegramFileService;
+    }
+
+    private boolean detectAllBanks(String text, String[] patterns) {
+        for (String pattern : patterns) {
+            if (!text.toLowerCase().contains(pattern.toLowerCase())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // Este método se encarga de procesar el documento recibido por el bot
@@ -99,6 +111,16 @@ public class DocumentProcessingService {
                 textoExtraido = instance.doOCR(image);
                 System.out.println(textoExtraido);
 
+
+                boolean isCuentaDni = detectBank(textoExtraido, doc.getFileName(), CUENTA_DNI_PATTERNS) || detectAllBanks(textoExtraido, CUENTA_DNI_FALLBACK_PATTERNS);
+                if (isCuentaDni) {
+                    TransferDTO transferenciaDNI = CuentaDni.parseCuentaDniTransfer(textoExtraido, doc);
+                    if (transferenciaDNI != null) {
+                        lastTransfer = transferenciaDNI;
+                        telegramFileService.createExcelFile(transferenciaDNI);
+                        return CuentaDni.formatCuentaDni(transferenciaDNI);
+                    }
+                }
 
                 // --- INICIO LOG UALA ---
                 boolean isUala = detectBank(textoExtraido, doc.getFileName(), UALA_PATTERNS);
