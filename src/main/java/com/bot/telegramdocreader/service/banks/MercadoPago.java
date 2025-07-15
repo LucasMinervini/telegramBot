@@ -225,20 +225,20 @@ public class MercadoPago {
                 }
             }
             
-            // Convertir mes
+            // Convertir mes (acepta abreviaturas)
             String mes = "";
-            if (lower.contains("enero")) mes = "01";
-            else if (lower.contains("febrero")) mes = "02";
-            else if (lower.contains("marzo")) mes = "03";
-            else if (lower.contains("abril")) mes = "04";
-            else if (lower.contains("mayo")) mes = "05";
-            else if (lower.contains("junio")) mes = "06";
-            else if (lower.contains("julio")) mes = "07";
-            else if (lower.contains("agosto")) mes = "08";
-            else if (lower.contains("septiembre") || lower.contains("setiembre")) mes = "09";
-            else if (lower.contains("octubre")) mes = "10";
-            else if (lower.contains("noviembre")) mes = "11";
-            else if (lower.contains("diciembre")) mes = "12";
+            if (lower.contains("enero") || lower.contains("ene")) mes = "01";
+            else if (lower.contains("febrero") || lower.contains("feb")) mes = "02";
+            else if (lower.contains("marzo") || lower.contains("mar")) mes = "03";
+            else if (lower.contains("abril") || lower.contains("abr")) mes = "04";
+            else if (lower.contains("mayo") || lower.contains("may")) mes = "05";
+            else if (lower.contains("junio") || lower.contains("jun")) mes = "06";
+            else if (lower.contains("julio") || lower.contains("jul")) mes = "07";
+            else if (lower.contains("agosto") || lower.contains("ago")) mes = "08";
+            else if (lower.contains("septiembre") || lower.contains("setiembre") || lower.contains("sep")) mes = "09";
+            else if (lower.contains("octubre") || lower.contains("oct")) mes = "10";
+            else if (lower.contains("noviembre") || lower.contains("nov")) mes = "11";
+            else if (lower.contains("diciembre") || lower.contains("dic")) mes = "12";
             
             if (!dia.isEmpty() && !mes.isEmpty() && !año.isEmpty()) {
                 return dia + "/" + mes + "/" + año;

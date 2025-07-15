@@ -63,7 +63,7 @@ public class DocumentProcessingService {
     private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
     private static final String[] BRUBANK_PATTERNS = {"brubank"};
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
-    private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro"};
+    private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro", "Control Nro."};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
     private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
     private static final String[] SANTANDER_FALLBACK_PATTERNS = {"Comprobante de transferencia", "CTA"};
@@ -321,6 +321,7 @@ public class DocumentProcessingService {
                     }
                 }
                 TransferDTO transferencia = mapperTransf(textoExtraido, true, doc);
+                System.out.println(textoExtraido);
                 
                 if (transferencia != null) {
                     lastTransfer = transferencia;
@@ -369,6 +370,7 @@ public class DocumentProcessingService {
                     }
                 } else {
                     return textoExtraido;
+                    
                 }
             } else {
                 return "Formato de archivo no soportado.";
@@ -510,7 +512,8 @@ public class DocumentProcessingService {
         boolean isBankProvincia = detectBank(textoExtraido, doc.getFileName(), BANCO_PROVINCIA_PATTERNS) || textoExtraido.toLowerCase().contains("nueva transferencia");
         boolean bancorByContent = detectBancorByContent(textoExtraido);
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
-        boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS);
+        boolean isNewMacroFormat = textoExtraido.contains("Control Nro.") || textoExtraido.contains("Operación Nro");
+        boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS) || isNewMacroFormat;
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
         
         boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
@@ -559,7 +562,11 @@ public class DocumentProcessingService {
             return com.bot.telegramdocreader.service.banks.Galicia.parseGaliciaTransfer(textoExtraido, doc);
         }
        if (isMacro) {
-            return com.bot.telegramdocreader.service.banks.Macro.parserMacro(textoExtraido, doc);
+            if (isNewMacroFormat) {
+                return com.bot.telegramdocreader.service.banks.Macro.parserNewMacro(textoExtraido, doc);
+            } else {
+                return com.bot.telegramdocreader.service.banks.Macro.parserMacro(textoExtraido, doc);
+            }
        }
         
        
