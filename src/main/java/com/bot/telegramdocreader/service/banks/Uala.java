@@ -31,7 +31,7 @@ public class Uala {
         String tipoOperacion = "";
         String cuit = "";
         String monto = "";
-        String accountDestiny = "";
+        
         String nameDestiny = "";
         String cbuDestiny = "";
         String cuentaDestinoNombre = "";
@@ -128,14 +128,7 @@ public class Uala {
                 cuentaDestinoNumero = valTrim;
             }
         }
-        // Concatenar nombre y número si ambos existen, siempre con guion sin espacios
-        if (cuentasDestino.size() >= 2) {
-            accountDestiny = cuentasDestino.get(0).trim() + "-" + cuentasDestino.get(1).trim();
-        } else if (cuentasDestino.size() == 1) {
-            accountDestiny = cuentasDestino.get(0).trim();
-        } else {
-            accountDestiny = "";
-        }
+       
         nameDestiny = "";
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();
