@@ -125,8 +125,8 @@ public class TelegramFileService {
                 Cell cuitCell = row.createCell(2);
                 Cell bankCell = row.createCell(4);
                 if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("PREX")) {
-                    cuitCell.setCellValue(transferencia.getCbuDestino() != null ? transferencia.getCbuDestino() : "");
-                    bankCell.setCellValue(transferencia.getCuentaDestino() != null ? transferencia.getCuentaDestino() : "");
+                    cuitCell.setCellValue(transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "");
+                    bankCell.setCellValue(transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
                 } else {
                     cuitCell.setCellValue(transferencia.getCuit());
                     bankCell.setCellValue(transferencia.getBank());
@@ -173,5 +173,41 @@ public class TelegramFileService {
 
     public String uploadToDrive(String filePath) {
         return googleDriveService.uploadFile(filePath, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+
+    public java.io.File downloadFileByFileId(String fileId, String botToken) throws IOException {
+        try {
+            String url = "https://api.telegram.org/file/bot" + botToken + "/" + getFilePathFromTelegram(fileId, botToken);
+            java.net.URL downloadUrl = new java.net.URL(url);
+            java.io.InputStream in = downloadUrl.openStream();
+            java.io.File tempFile = java.io.File.createTempFile("telegram_photo_", ".jpg");
+            java.nio.file.Files.copy(in, tempFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            in.close();
+            return tempFile;
+        } catch (Exception e) {
+            throw new IOException("Error descargando archivo de Telegram: " + e.getMessage(), e);
+        }
+    }
+
+    private String getFilePathFromTelegram(String fileId, String botToken) throws IOException {
+        String url = "https://api.telegram.org/bot" + botToken + "/getFile?file_id=" + fileId;
+        java.net.URL apiUrl = new java.net.URL(url);
+        java.net.HttpURLConnection conn = (java.net.HttpURLConnection) apiUrl.openConnection();
+        conn.setRequestMethod("GET");
+        conn.connect();
+        int responseCode = conn.getResponseCode();
+        if (responseCode != 200) {
+            throw new IOException("No se pudo obtener el file_path de Telegram. Código: " + responseCode);
+        }
+        java.io.InputStream is = conn.getInputStream();
+        java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
+        String response = s.hasNext() ? s.next() : "";
+        s.close();
+        is.close();
+        int idx = response.indexOf("\"file_path\":");
+        if (idx == -1) throw new IOException("file_path no encontrado en la respuesta de Telegram");
+        int start = response.indexOf('"', idx + 12) + 1;
+        int end = response.indexOf('"', start);
+        return response.substring(start, end);
     }
 }

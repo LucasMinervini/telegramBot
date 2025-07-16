@@ -11,14 +11,24 @@ import lombok.Data;
 public class TransferDTO {
     
     private String name;
+    private String cuentaOrigen;
     private String amount;
     private String cuit;
     private String date;
     private String bank;
     private String typeOFTransfer;
-    private String cuentaDestino;    
-    private String cbuDestino;       
-     
+    private String accountDestiny;    
+    private String cbuDestiny;       
+
+
+    
+    // Nuevos campos para Banco Provincia
+    private String transactionNumber;
+    private String accountToDebit;
+    private String titular;
+    private String titularCuentaDestino;
+    private String referencia;
+    private String motivo;
       
     
     public String receiverDetails() {

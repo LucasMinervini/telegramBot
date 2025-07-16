@@ -15,8 +15,8 @@ public class Prex {
                 transferencia.getDate() != null ? transferencia.getDate() : "",
                 transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
                 transferencia.getAmount() != null ? transferencia.getAmount() : "",
-                transferencia.getCbuDestino() != null ? transferencia.getCbuDestino() : "",
-                transferencia.getCuentaDestino() != null ? transferencia.getCuentaDestino() : "");
+                transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "",
+                transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
     }
 
     public static TransferDTO parsePrexTransfer(String textoExtraido, Document doc) {
@@ -99,8 +99,8 @@ public class Prex {
                     .cuit(cuitSender)
                     .amount(monto)
                     .bank(bankReceiver)
-                    .cbuDestino(cbuDestino)
-                    .cuentaDestino(cuentaDestino)
+                    .cbuDestiny(cbuDestino)
+                    .accountDestiny(cuentaDestino)
                     .build();
             }
         }
