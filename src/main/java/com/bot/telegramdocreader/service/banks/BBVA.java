@@ -25,13 +25,14 @@ public class BBVA {
             String lower = line.toLowerCase().trim();
             // Fecha y hora
             if (fecha.isEmpty() && lower.matches(".*\\d{2}/\\d{2}/\\d{4}.*\\d{2}:\\d{2}:\\d{2}.*")) {
-                fecha = line.trim();
+                fecha = line.replaceFirst("(?i)fecha:? ?", "").trim();
             } else if (fecha.isEmpty() && lower.matches(".*\\d{2}/\\d{2}/\\d{4}.*")) {
                 fecha = line.replaceAll(".*?(\\d{2}/\\d{2}/\\d{4}).*", "$1").trim();
             }
             // Monto
-            if (monto.isEmpty() && lower.matches(".*\\$ ?[0-9.]+,[0-9]{2}.*")) {
-                monto = line.replaceAll("[^0-9.,]", "").replaceFirst(",", ".");
+            if (monto.isEmpty() && lower.matches(".*\\$ ?[0-9.,]+,[0-9]{2}.*")) {
+                // Keep dots for thousands and comma for decimals
+                monto = line.replaceAll("[^0-9.,]", "");
             }
             // Cuenta de origen
             if (accountOrig.isEmpty() && lower.contains("titular")) {

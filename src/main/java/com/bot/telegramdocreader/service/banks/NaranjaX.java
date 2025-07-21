@@ -57,9 +57,9 @@ public class NaranjaX {
                 fecha = original.trim();
             }
             // Buscar monto: cualquier línea que contenga un valor monetario
-            if (monto.isEmpty()) {
-                String montoLinea = lines[i].replaceAll("^[^0-9]*", "").replaceAll("[^0-9.,]", "").replace(",", ".").trim();
-                if (montoLinea.matches("\\d+[.,]?\\d*")) {
+            if (lower.startsWith("$") || lower.contains("monto")) {
+                String montoLinea = original.replaceAll("[^0-9,.]", "").replace(".", "").replace(",", ".").trim();
+                if (!montoLinea.isEmpty()) {
                     monto = montoLinea;
                 }
             }
