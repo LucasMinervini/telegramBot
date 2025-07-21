@@ -84,7 +84,9 @@ public class Prex {
                         cuitEmisorEncontrado = true;
                     }
                 }
-                if (lineaLower.matches(".*c[bv]u.*:.*") || lineaLower.contains("destino:")) {
+                if (lineaLower.startsWith("cvu/cbu")) {
+                    cbuDestino = lineaOriginal.substring(lineaOriginal.indexOf(" ") + 1).trim();
+                } else if (lineaLower.matches(".*c[bv]u.*:.*") || lineaLower.contains("destino:")) {
                     cbuDestino = lineaOriginal.replaceAll("(?i)CVU/CBU:|CVU destino:|CBU destino:|Destino:", "").trim();
                 }
                 if (lineaLower.contains("cuenta") && lineaLower.contains("destino")) {

@@ -30,25 +30,36 @@ public class NaranjaX {
         }
         // Buscar CUIT/CUIL/CUL y monto en todo el comprobante
         boolean inCuentaOrigen = false;
+        boolean inCuentaDestino = false;
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();
             String original = lines[i].trim();
             // Detectar inicio y fin de sección Cuenta Origen
             if (lower.contains("cuenta origen")) {
                 inCuentaOrigen = true;
+                inCuentaDestino = false;
                 continue;
             }
             if (lower.contains("cuenta destino")) {
                 inCuentaOrigen = false;
+                inCuentaDestino = true;
+                continue;
             }
-            // Detectar fecha en formato 24/JUN/2025-14:18 h
-            if (original.matches("\\d{2}/[A-Z]{3}/\\d{4}-\\d{2}:\\d{2} h")) {
+            if (lower.contains("información de la operación")) {
+                inCuentaDestino = false;
+            }
+            // Detectar fecha en formato 16/JUL/2025-11:55h (más flexible con mayúsculas/minúsculas)
+            if (original.matches("(?i)\\d{2}/[a-z]{3}/\\d{4}-\\d{2}:\\d{2}\\s*h")) {
                 fecha = original.split("-")[0].trim();
             }
+            // También buscar fecha sin la 'h' al final
+            if (fecha.isEmpty() && original.matches("(?i)\\d{2}/[a-z]{3}/\\d{4}")) {
+                fecha = original.trim();
+            }
             // Buscar monto: cualquier línea que contenga un valor monetario
-            if (monto.isEmpty()) {
-                String montoLinea = lines[i].replaceAll("^[^0-9]*", "").replaceAll("[^0-9.,]", "").replace(",", ".").trim();
-                if (montoLinea.matches("\\d+[.,]?\\d*")) {
+            if (lower.startsWith("$") || lower.contains("monto")) {
+                String montoLinea = original.replaceAll("[^0-9,.]", "").replace(".", "").replace(",", ".").trim();
+                if (!montoLinea.isEmpty()) {
                     monto = montoLinea;
                 }
             }
@@ -65,11 +76,18 @@ public class NaranjaX {
                     cuit = original.replaceAll("-", "");
                 }
             }
-            if (lower.contains("banco virtual") && bancoReceptor.isEmpty()) {
-                bancoReceptor = original.replaceAll("[()]+", "").trim();
-            }
-            if (bancoReceptor.isEmpty() && lower.contains("fargotez")) {
-                bancoReceptor = original.replaceAll("[()]+", "").trim();
+            // Capturar el titular de la cuenta destino (primera línea después de "Cuenta destino")
+            if (inCuentaDestino && bancoReceptor.isEmpty() && !original.isEmpty() && 
+                !lower.contains("banco") && !lower.contains("cvu") && !lower.contains("cuil") && 
+                !lower.contains("cuenta") && !original.matches("\\d+.*")) {
+                String titular = original.trim();
+                // Limpiar prefijos no deseados como "ma", "ema", etc.
+                if (titular.toLowerCase().startsWith("ma ")) {
+                    titular = titular.substring(3).trim();
+                } else if (titular.toLowerCase().startsWith("ema ")) {
+                    titular = titular.substring(4).trim();
+                }
+                bancoReceptor = titular;
             }
         }
         if (cuit.length() == 11) {
