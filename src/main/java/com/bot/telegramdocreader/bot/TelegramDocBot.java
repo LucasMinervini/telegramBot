@@ -104,7 +104,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             org.telegram.telegrambots.meta.api.objects.PhotoSize largestPhoto = photos.get(photos.size() - 1);
             String fileId = largestPhoto.getFileId();
             // Descargar el archivo usando TelegramFileService
-            java.io.File photoFile = telegramFileService.downloadFileByFileId(fileId, botToken);
+            //java.io.File photoFile = telegramFileService.downloadFileByFileId(fileId, botToken);
             // Crear un objeto Document simulado para reutilizar el flujo de procesamiento
             org.telegram.telegrambots.meta.api.objects.Document fakeDoc = new org.telegram.telegrambots.meta.api.objects.Document();
             fakeDoc.setFileId(fileId);
@@ -154,7 +154,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             markupInline.setKeyboard(rowsInline);
              */
 
-            // Solución: agregar los botones download y save aunque el de Drive esté comentado
+            
             rowInline.add(downloadButton);
             rowInline.add(saveButton);
             rowsInline.add(rowInline);

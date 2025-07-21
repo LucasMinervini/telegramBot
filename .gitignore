@@ -13,6 +13,7 @@ application-local.properties
 application-local.yml
 
 # Tokens y credenciales
+.env
 tokens/
 *.tokens
 /src/main/resources/credentials.json

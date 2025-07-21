@@ -48,7 +48,7 @@ import com.bot.telegramdocreader.service.banks.Macro;
 public class DocumentProcessingService {
 
     // Constantes para mejorar mantenibilidad
-    private static final int MAX_LINES_TO_CHECK = 15;
+    //private static final int MAX_LINES_TO_CHECK = 15;
     private static final String TESSERACT_DATA_PATH = "C:\\Program Files\\Tesseract-OCR\\tessdata";
     private static final String TESSERACT_LANGUAGE = "spa";
     private static final String TELEGRAM_FILE_URL_TEMPLATE = "https://api.telegram.org/file/bot%s/%s";
@@ -96,7 +96,7 @@ public class DocumentProcessingService {
     public String processDocument(Document doc, String botToken, Long chatId) throws Exception {
         String textoExtraido;
         
-        boolean isPdfFormat = isPdf(doc);
+      //  boolean isPdfFormat = isPdf(doc);
         try {
             
             if (isImage(doc)) {
@@ -405,7 +405,7 @@ public class DocumentProcessingService {
         boolean isImageByMimeType = mimeType.startsWith("image/");
     
         
-        // Si la extensión es de imagen, considerar imagen aunque el mimeType no sea image/
+        // Si la extensión es de imagen, considerar imagen aunque el mimeType no sea image
         return isImageByExtension || isImageByMimeType;
     }
     
@@ -1024,21 +1024,7 @@ public void handleDocumentMessage(Message message) {
         }
     }
 }
-private String extractCuitSender(String texto) {
-    
-    Pattern pattern = Pattern.compile("(?i)(?:cuit(?:\\s*del\\s*emisor)?[:\\s]*)?([0-9]{2}-?[0-9]{8}-?[0-9])");
-    Matcher matcher = pattern.matcher(texto);
-    while (matcher.find()) {
-        String cuit = matcher.group(1);
-        if (cuit != null && !cuit.isEmpty()) {
-            String digits = cuit.replaceAll("[^0-9]", "");
-            if (digits.length() == 11) {
-                return digits.substring(0,2) + "-" + digits.substring(2,10) + "-" + digits.substring(10);
-            }
-        }
-    }
-    return null;
-}
+
 
 /**
  * Método auxiliar para detectar bancos basado en patrones
@@ -1059,7 +1045,7 @@ private boolean detectBank(String texto, String fileName, String[] patterns) {
             return true;
         }
     }
-    // Verificar en las primeras líneas del texto (más robusto para BBVA)
+    // Verificar en las primeras líneas del texto 
     String[] lines = texto.split("\\r?\\n");
     for (int i = 0; i < Math.min(10, lines.length); i++) { // Aumentar a 10 líneas para Ualá
         String lineNormalize = normalize.apply(lines[i].toLowerCase());

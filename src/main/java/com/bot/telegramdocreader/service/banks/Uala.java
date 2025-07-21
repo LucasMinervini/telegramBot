@@ -31,11 +31,10 @@ public class Uala {
         String tipoOperacion = "";
         String cuit = "";
         String monto = "";
-        String accountDestiny = "";
         String nameDestiny = "";
-        String cbuDestiny = "";
         String cuentaDestinoNombre = "";
         String cuentaDestinoNumero = "";
+        
         java.util.List<String> cuentasDestino = new java.util.ArrayList<>();
 
         for (int i = 0; i < lines.length; i++) {
@@ -54,6 +53,8 @@ public class Uala {
                 }
                 if (!value.isEmpty() && !isField.test(value)) fecha = value;
             }
+
+
 
             // Fallback: buscar fecha en cualquier línea si sigue vacía
             if (fecha.isEmpty()) {
@@ -116,9 +117,13 @@ public class Uala {
                 if (!value.isEmpty()) monto = value;
             }
         }
+
         // Al final, tomar el primer valor no numérico como nombre y el primer numérico como número
         cuentaDestinoNombre = "";
         cuentaDestinoNumero = "";
+        nameDestiny = "";
+
+        
         for (String val : cuentasDestino) {
             String valTrim = val.trim();
             if (cuentaDestinoNombre.isEmpty() && !valTrim.matches("\\d+")) {
@@ -128,15 +133,8 @@ public class Uala {
                 cuentaDestinoNumero = valTrim;
             }
         }
-        // Concatenar nombre y número si ambos existen, siempre con guion sin espacios
-        if (cuentasDestino.size() >= 2) {
-            accountDestiny = cuentasDestino.get(0).trim() + "-" + cuentasDestino.get(1).trim();
-        } else if (cuentasDestino.size() == 1) {
-            accountDestiny = cuentasDestino.get(0).trim();
-        } else {
-            accountDestiny = "";
-        }
-        nameDestiny = "";
+       
+        
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();
             String original = lines[i].trim();
@@ -150,7 +148,7 @@ public class Uala {
         }
 
         if (tipoOperacion.isEmpty()) tipoOperacion = "Transferencia";
-        // Asignar siempre 'UALA' al campo bank para la detección
+        
         TransferDTO transferencia = TransferDTO.builder()
             .date(fecha)
             .typeOFTransfer(tipoOperacion.isEmpty() ? "Transferencia" : tipoOperacion)
@@ -159,7 +157,6 @@ public class Uala {
             .bank("UALA")
             .accountDestiny(cuentaDestinoNombre)
             .name(nameDestiny)
-            .cbuDestiny(cbuDestiny)
             .build();
         return transferencia;
     }
