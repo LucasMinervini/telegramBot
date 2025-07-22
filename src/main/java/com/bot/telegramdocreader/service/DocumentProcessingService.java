@@ -23,6 +23,7 @@ import com.bot.telegramdocreader.service.banks.MercadoPago;
 import com.bot.telegramdocreader.service.banks.Bancor;
 import com.bot.telegramdocreader.service.banks.NaranjaX;
 import com.bot.telegramdocreader.service.banks.CuentaDni;
+import com.bot.telegramdocreader.service.banks.Bna;
 
 import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
@@ -66,9 +67,9 @@ public class DocumentProcessingService {
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro", "Control Nro."};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
     private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
-    private static final String[] BNA_PATTERNS = {"bna", "bna+", "BNA*", "banco nacion", "banco de la nacion", "banco nación", "banco de la nación"};
     private static final String[] SANTANDER_FALLBACK_PATTERNS = {"Comprobante de transferencia", "CTA"};
     private static final String[] CUENTA_DNI_PATTERNS = {"cuenta dni", "cuentadni"};
+    private static final String[] BNA_PATTERNS = {"bna", "banco nacion", "banco de la nación", "banco nacion argentina", "banco de la nación argentina"};
     private static final String[] CUENTA_DNI_FALLBACK_PATTERNS = {"código de referencia", "comprobante de transferencia"};
     
     
@@ -247,6 +248,8 @@ public class DocumentProcessingService {
                             return Galicia.formatGalicia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("SANTANDER")) {
                             return Santander.formatSantander(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BNA")) {
+                            return Bna.formatBna(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("MACRO")) {
                             return Macro.formatMacro(transferencia);
                         }
@@ -355,6 +358,8 @@ public class DocumentProcessingService {
                             return Galicia.formatGalicia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("SANTANDER")) {
                             return Santander.formatSantander(transferencia);
+                        } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BNA")) {
+                            return Bna.formatBna(transferencia);
                         }
                         else {
                             String formatoBase = "Fecha: %s\nTipo de Operación: %s\nCuit/Cuil: %s\nMonto Bruto: $ %s\nBanco Receptor: %s";
@@ -507,6 +512,7 @@ public class DocumentProcessingService {
         boolean esBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
 
         boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
+        boolean isBNA = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
         boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || textoExtraido.toLowerCase().contains("enviaste dinero");
         boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS) || textoExtraido.toLowerCase().contains("mercadopago") || textoExtraido.toLowerCase().contains("mercado pago") || textoExtraido.toLowerCase().contains("mpago");
         boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
@@ -516,7 +522,7 @@ public class DocumentProcessingService {
         boolean isNewMacroFormat = textoExtraido.contains("Control Nro.") || textoExtraido.contains("Operación Nro");
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS) || isNewMacroFormat;
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
-        boolean isBna = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
+        
         boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
         boolean isCuentaDni = false;
         // Detectar Cuenta DNI por patrones característicos (más robusto)
@@ -558,13 +564,13 @@ public class DocumentProcessingService {
             return com.bot.telegramdocreader.service.banks.NaranjaX.parseNaranjaXTransfer(textoExtraido, doc);
         }
         
+        if (isBNA) {
+            return com.bot.telegramdocreader.service.banks.Bna.parserBna(textoExtraido, doc);
+        }
+        
         
         if (isGalicia) {
             return com.bot.telegramdocreader.service.banks.Galicia.parseGaliciaTransfer(textoExtraido, doc);
-        }
-        
-        if (isBna) {
-            return com.bot.telegramdocreader.service.banks.Bna.parserBna(textoExtraido, doc);
         }
        if (isMacro) {
             if (isNewMacroFormat) {
@@ -1113,4 +1119,3 @@ private boolean detectBBVA(String texto, String fileName) {
     return (textoLower.contains("banco francés") || textoLower.contains("francés") || textoLower.contains("frances")) && keywords;
 }
     }
-
