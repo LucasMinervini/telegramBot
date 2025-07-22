@@ -66,6 +66,7 @@ public class DocumentProcessingService {
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro", "Control Nro."};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
     private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
+    private static final String[] BNA_PATTERNS = {"bna", "bna+", "BNA*", "banco nacion", "banco de la nacion", "banco nación", "banco de la nación"};
     private static final String[] SANTANDER_FALLBACK_PATTERNS = {"Comprobante de transferencia", "CTA"};
     private static final String[] CUENTA_DNI_PATTERNS = {"cuenta dni", "cuentadni"};
     private static final String[] CUENTA_DNI_FALLBACK_PATTERNS = {"código de referencia", "comprobante de transferencia"};
@@ -515,7 +516,7 @@ public class DocumentProcessingService {
         boolean isNewMacroFormat = textoExtraido.contains("Control Nro.") || textoExtraido.contains("Operación Nro");
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS) || isNewMacroFormat;
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
-        
+        boolean isBna = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
         boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
         boolean isCuentaDni = false;
         // Detectar Cuenta DNI por patrones característicos (más robusto)
@@ -560,6 +561,10 @@ public class DocumentProcessingService {
         
         if (isGalicia) {
             return com.bot.telegramdocreader.service.banks.Galicia.parseGaliciaTransfer(textoExtraido, doc);
+        }
+        
+        if (isBna) {
+            return com.bot.telegramdocreader.service.banks.Bna.parserBna(textoExtraido, doc);
         }
        if (isMacro) {
             if (isNewMacroFormat) {
@@ -1108,3 +1113,4 @@ private boolean detectBBVA(String texto, String fileName) {
     return (textoLower.contains("banco francés") || textoLower.contains("francés") || textoLower.contains("frances")) && keywords;
 }
     }
+
