@@ -126,6 +126,13 @@ public static TransferDTO parserMacro(String textoExtraido, Document doc) {
                     monto = "$" + sb.toString() + "," + decimal;
                 }
             }
+            // Nuevo: capturar titular si existe "nombre beneficiario:"
+            if (bancoReceptor.equals("Macro") && lower.startsWith("nombre beneficiario:")) {
+                String titular = original.replaceFirst("(?i)nombre beneficiario:", "").trim();
+                if (!titular.isEmpty()) {
+                    bancoReceptor = titular;
+                }
+            }
         }
 return TransferDTO.builder()
         .date(fecha)
