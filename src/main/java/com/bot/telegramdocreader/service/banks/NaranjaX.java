@@ -9,11 +9,27 @@ public class NaranjaX {
         String cuitFormateado = transferencia.getCuit() != null && transferencia.getCuit().length() == 11
             ? transferencia.getCuit().replaceFirst("(\\d{2})(\\d{8})(\\d{1})", "$1-$2-$3")
             : (transferencia.getCuit() != null ? transferencia.getCuit() : "");
+        // Limpiar y formatear el monto
+        String montoFormateado = "";
+        if (transferencia.getAmount() != null && !transferencia.getAmount().isEmpty()) {
+            String montoLimpio = transferencia.getAmount().replaceAll("[^0-9,.]", "");
+            montoLimpio = montoLimpio.replaceAll("^[sS$]+", ""); // Elimina cualquier 's', 'S' o '$' al inicio
+            try {
+                java.text.DecimalFormatSymbols symbols = new java.text.DecimalFormatSymbols();
+                symbols.setDecimalSeparator(',');
+                symbols.setGroupingSeparator('.');
+                java.text.DecimalFormat df = new java.text.DecimalFormat("#,##0.00", symbols);
+                double valor = Double.parseDouble(montoLimpio.replace(",", "."));
+                montoFormateado = df.format(valor);
+            } catch (Exception e) {
+                montoFormateado = montoLimpio;
+            }
+        }
         return String.format(formato,
                 transferencia.getDate() != null ? transferencia.getDate() : "",
                 transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
                 cuitFormateado,
-                transferencia.getAmount() != null ? transferencia.getAmount() : "",
+                montoFormateado,
                 transferencia.getBank() != null ? transferencia.getBank() : "");
     }
 
@@ -56,11 +72,21 @@ public class NaranjaX {
             if (fecha.isEmpty() && original.matches("(?i)\\d{2}/[a-z]{3}/\\d{4}")) {
                 fecha = original.trim();
             }
-            // Buscar monto: cualquier línea que contenga un valor monetario
-            if (lower.startsWith("$") || lower.contains("monto")) {
-                String montoLinea = original.replaceAll("[^0-9,.]", "").replace(".", "").replace(",", ".").trim();
-                if (!montoLinea.isEmpty()) {
-                    monto = montoLinea;
+            // Monto
+            if ((lower.contains("importe") || lower.contains("monto")) && monto.isEmpty() || lower.startsWith("s ")) {
+                String value = original.replaceAll("(?i)importe|monto", "").replace(":", "").trim();
+                // Limpiar prefijos como 's', '$', etc. y espacios
+                value = value.replaceAll("^[sS$'’\"\u201c\u201d]+", "").trim();
+                value = value.replaceAll("[\"'’“”]+$", "").trim();
+                if (!value.isEmpty()) {
+                    monto =  value;
+                }
+            }
+            if (monto.isEmpty() && lower.matches(".*\\$\\s*[0-9]+[.,]?[0-9]*.*")) {
+                String value = original.replaceAll("[^0-9$.,]", "").trim();
+                if (!value.isEmpty()) {
+                    // Keep the $ if present, otherwise add it
+                    monto = value.startsWith("$") ? value : "$" + value;
                 }
             }
             if (inCuentaOrigen && cuit.isEmpty()) {
@@ -81,12 +107,8 @@ public class NaranjaX {
                 !lower.contains("banco") && !lower.contains("cvu") && !lower.contains("cuil") && 
                 !lower.contains("cuenta") && !original.matches("\\d+.*")) {
                 String titular = original.trim();
-                // Limpiar prefijos no deseados como "ma", "ema", etc.
-                if (titular.toLowerCase().startsWith("ma ")) {
-                    titular = titular.substring(3).trim();
-                } else if (titular.toLowerCase().startsWith("ema ")) {
-                    titular = titular.substring(4).trim();
-                }
+                // Limpiar prefijos no deseados como "ma", "ema", "pa", etc.
+                titular = titular.replaceFirst("^(ma |ema |pa |pm |pm |pa |ma |ema )", "").trim();
                 bancoReceptor = titular;
             }
         }
