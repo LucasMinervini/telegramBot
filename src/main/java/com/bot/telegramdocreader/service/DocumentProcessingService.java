@@ -18,7 +18,6 @@ import com.bot.telegramdocreader.service.banks.Santander;
 import com.bot.telegramdocreader.service.banks.Uala;
 import com.bot.telegramdocreader.service.banks.BBVA;
 import com.bot.telegramdocreader.service.banks.BancoProvincia;
-import com.bot.telegramdocreader.service.banks.Brubank;
 import com.bot.telegramdocreader.service.banks.MercadoPago;
 import com.bot.telegramdocreader.service.banks.Bancor;
 import com.bot.telegramdocreader.service.banks.NaranjaX;
