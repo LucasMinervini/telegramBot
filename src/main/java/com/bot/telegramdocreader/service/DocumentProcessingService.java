@@ -62,7 +62,7 @@ public class DocumentProcessingService {
     private static final String[] PERSONAL_PAY_PATTERNS = {"personal pay", "personalpay"};
     private static final String[] BBVA_PATTERNS = {"bbva", "b b v a", "banco bbva", "banco francés", "frances", "francés"};
     private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
-    private static final String[] BRUBANK_PATTERNS = {"brubank"};
+    private static final String[] BRUBANK_PATTERNS = {"brubank", "envío de dinero a", "envio de dinero a", "transferencia enviada", "cbu / alias", "id operación", "id operacion", "casa de ahorro en pesos"};
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro", "Control Nro."};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
@@ -233,7 +233,7 @@ public class DocumentProcessingService {
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("UALA")) {
                             return Uala.formatUala(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BRUBANK")) {
-                            return Brubank.formatBrubank(transferencia);
+                            return transferencia.toString();
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
                             return BancoProvincia.formatBancoProvincia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
@@ -342,7 +342,7 @@ public class DocumentProcessingService {
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("UALA")) {
                             return Uala.formatUala(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BRUBANK")) {
-                            return Brubank.formatBrubank(transferencia);
+                            return transferencia.toString();
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("Banco Provincia")) {
                             return BancoProvincia.formatBancoProvincia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) 
@@ -509,7 +509,57 @@ public class DocumentProcessingService {
 
     private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Booleanos para detectar el tipo de banco
-        boolean esBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
+        boolean isBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
+        
+        // Detección adicional de Brubank por patrones específicos
+        if (!isBrubank) {
+            String textoLower = textoExtraido.toLowerCase();
+            // Normalizar texto para eliminar caracteres extraños del OCR
+            String textoNormalizado = textoLower.replaceAll("[^a-záéíóúñ0-9\\s/$-]", " ").replaceAll("\\s+", " ");
+            
+            // Patrones específicos de Brubank que aparecen en comprobantes sin la palabra "brubank"
+            boolean tieneEnvioDedinero = textoNormalizado.contains("envío de dinero a") || textoNormalizado.contains("envio de dinero a");
+            boolean tieneTransferenciaEnviada = textoNormalizado.contains("transferencia enviada");
+            boolean tieneCbuAlias = textoNormalizado.contains("cbu alias") || textoNormalizado.contains("cbu / alias") || textoNormalizado.contains("cbu/alias");
+            boolean tieneIdOperacion = textoNormalizado.contains("id operación") || textoNormalizado.contains("id operacion");
+            boolean tieneCasaAhorro = textoNormalizado.contains("caja de ahorro en pesos") || textoNormalizado.contains("casa de ahorro en pesos");
+            boolean tieneNumeroTransaccion = textoLower.matches(".*\\d{10}.*"); // Números de transacción largos típicos de Brubank
+            boolean tieneBancoDestino = textoNormalizado.contains("banco destino");
+            boolean tieneOrigen = textoNormalizado.contains("origen");
+            boolean tieneCuitFormato = textoLower.matches(".*\\d{2}-\\d{8}-\\d.*"); // CUIT en formato XX-XXXXXXXX-X
+            
+            // Debug: imprimir qué patrones se encontraron
+            System.out.println("=== DEBUG BRUBANK DETECTION ===");
+            System.out.println("Texto normalizado: " + textoNormalizado);
+            System.out.println("tieneEnvioDedinero: " + tieneEnvioDedinero);
+            System.out.println("tieneTransferenciaEnviada: " + tieneTransferenciaEnviada);
+            System.out.println("tieneCbuAlias: " + tieneCbuAlias);
+            System.out.println("tieneIdOperacion: " + tieneIdOperacion);
+            System.out.println("tieneCasaAhorro: " + tieneCasaAhorro);
+            System.out.println("tieneNumeroTransaccion: " + tieneNumeroTransaccion);
+            System.out.println("tieneBancoDestino: " + tieneBancoDestino);
+            System.out.println("tieneOrigen: " + tieneOrigen);
+            System.out.println("tieneCuitFormato: " + tieneCuitFormato);
+            
+            // Si tiene al menos 2 de estos patrones, es muy probable que sea Brubank
+            int patronesEncontrados = 0;
+            if (tieneEnvioDedinero) patronesEncontrados++;
+            if (tieneTransferenciaEnviada) patronesEncontrados++;
+            if (tieneCbuAlias) patronesEncontrados++;
+            if (tieneIdOperacion) patronesEncontrados++;
+            if (tieneCasaAhorro) patronesEncontrados++;
+            if (tieneNumeroTransaccion) patronesEncontrados++;
+            if (tieneBancoDestino) patronesEncontrados++;
+            if (tieneOrigen) patronesEncontrados++;
+            if (tieneCuitFormato) patronesEncontrados++;
+            
+            System.out.println("Patrones encontrados: " + patronesEncontrados);
+            
+            if (patronesEncontrados >= 2) {
+                isBrubank = true;
+                System.out.println("DETECTADO COMO BRUBANK!");
+            }
+        }
 
         boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
         boolean isBNA = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
@@ -542,8 +592,8 @@ public class DocumentProcessingService {
             return com.bot.telegramdocreader.service.banks.CuentaDni.parseCuentaDniTransfer(textoExtraido, doc);
         }
 
-        if (esBrubank) {
-            return Brubank.parseBrubankTransfer(textoExtraido, doc);
+        if (isBrubank) {
+            return com.bot.telegramdocreader.service.banks.Brubank.parseBrubankTransfer(textoExtraido, doc);
         }
         if (isBBva) {
             return com.bot.telegramdocreader.service.banks.BBVA.parseBBVATransfer(textoExtraido, doc);

@@ -14,6 +14,7 @@ public class TransferDTO {
     private String cuentaOrigen;
     private String amount;
     private String cuit;
+    private String cuitOriginal; // Campo para almacenar el CUIT original con letras
     private String date;
     private String bank;
     private String typeOFTransfer;
