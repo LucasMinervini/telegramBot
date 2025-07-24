@@ -99,23 +99,53 @@ public class TelegramDocBot extends TelegramLongPollingBot {
         Long chatId = message.getChatId();
         String botToken = getBotToken();
         try {
-            // Obtener la foto de mayor resolución
+            
             List<org.telegram.telegrambots.meta.api.objects.PhotoSize> photos = message.getPhoto();
             org.telegram.telegrambots.meta.api.objects.PhotoSize largestPhoto = photos.get(photos.size() - 1);
             String fileId = largestPhoto.getFileId();
-            // Descargar el archivo usando TelegramFileService
-            //java.io.File photoFile = telegramFileService.downloadFileByFileId(fileId, botToken);
-            // Crear un objeto Document simulado para reutilizar el flujo de procesamiento
+            
+
             org.telegram.telegrambots.meta.api.objects.Document fakeDoc = new org.telegram.telegrambots.meta.api.objects.Document();
             fakeDoc.setFileId(fileId);
             fakeDoc.setFileName("foto_telegram.jpg");
             fakeDoc.setMimeType("image/jpeg");
+
+            
             // Procesar como documento
             String result = documentProcessingService.processDocument(fakeDoc, botToken, chatId);
-            sendTextMessage(chatId, result);
+            
+            // Crear botones inline (igual que en handleDocumentMessage)
+            InlineKeyboardMarkup markupInline = new InlineKeyboardMarkup();
+            List<List<InlineKeyboardButton>> rowsInline = new ArrayList<>();
+            List<InlineKeyboardButton> rowInline = new ArrayList<>();
+
+            InlineKeyboardButton downloadButton = new InlineKeyboardButton();
+            downloadButton.setText("Bajar Excel concatenados");
+            downloadButton.setCallbackData("download_concat_excel");
+
+            InlineKeyboardButton saveButton = new InlineKeyboardButton();
+            saveButton.setText("Guardar Excel");
+            saveButton.setCallbackData("save_excel");
+
+            rowInline.add(downloadButton);
+            rowInline.add(saveButton);
+            rowsInline.add(rowInline);
+            markupInline.setKeyboard(rowsInline);
+
+            // Enviar mensaje con los botones
+            SendMessage response = new SendMessage();
+            response.setChatId(chatId.toString());
+            response.setText(result);
+            response.setReplyMarkup(markupInline);
+            execute(response);
+            
         } catch (Exception e) {
             e.printStackTrace();
-            sendTextMessage(chatId, "Error al procesar la imagen enviada como foto.");
+            try {
+                execute(new SendMessage(chatId.toString(), "Error al procesar la imagen enviada como foto."));
+            } catch (TelegramApiException ex) {
+                ex.printStackTrace();
+            }
         }
     }
 
