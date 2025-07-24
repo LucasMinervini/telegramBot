@@ -89,6 +89,7 @@ public class Bancor {
 
     public static TransferDTO parseBancorTransfer(String textoExtraido, Document doc) {
         
+        
         String[] lines = textoExtraido.split("\\r?\\n|\\r");
         String fecha = "";
         String tipoOperacion = "";
@@ -162,7 +163,37 @@ public class Bancor {
                 }
             }
             
-            // CUIT Emisor - buscar de forma más simple y directa
+            // CUIT Emisor - buscar en sección "Datos origen"
+            if (cuitEmisor.isEmpty() && lower.contains("datos origen")) {
+                
+                // Buscar "CUIT/CUIL" después de "Datos origen"
+                for (int j = i; j < Math.min(i + 10, lines.length); j++) {
+                    String origenLine = lines[j].toLowerCase().trim();
+                    if (origenLine.contains("cuit/cuil")) {
+                        
+                        // Buscar en la siguiente línea el CUIT
+                        if (j + 1 < lines.length) {
+                            String cuitLine = lines[j + 1].trim();
+                            
+                            // Evitar líneas que contengan "CA $", "CVU", "Banco"
+                            if (!cuitLine.toLowerCase().contains("ca $") && 
+                                !cuitLine.toLowerCase().contains("cvu") && 
+                                !cuitLine.toLowerCase().contains("banco") && 
+                                !cuitLine.toLowerCase().contains("cuenta")) {
+                                String numbersOnly = cuitLine.replaceAll("[^0-9]", "");
+                                
+                                if (numbersOnly.length() == 11 && numbersOnly.matches("\\d{11}")) {
+                                    cuitEmisor = numbersOnly.substring(0,2) + "-" + numbersOnly.substring(2,10) + "-" + numbersOnly.substring(10);
+                                    
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // CUIT Emisor - búsqueda alternativa (mantener la lógica original como respaldo)
             if (cuitEmisor.isEmpty()) {
                 String numbersOnly = original.replaceAll("[^0-9]", "");
                 
@@ -243,6 +274,33 @@ public class Bancor {
                     if (!nextLine.isEmpty() && !nextLine.toLowerCase().contains("cvu") && 
                         !nextLine.toLowerCase().contains("cuit") && nextLine.length() > 5) {
                         bancoReceptor = nextLine;
+                        
+                    }
+                }
+            }
+            
+            // Búsqueda específica del banco en sección "Datos destino"
+            if (bancoReceptor.isEmpty() && lower.contains("datos destino")) {
+                
+                // Buscar "Banco" después de "Datos destino"
+                for (int j = i; j < Math.min(i + 10, lines.length); j++) {
+                    String destLine = lines[j].toLowerCase().trim();
+                    if (destLine.equals("banco")) {
+                        
+                        // Buscar en la siguiente línea el nombre del banco
+                        if (j + 1 < lines.length) {
+                            String bancoLine = lines[j + 1].trim();
+                            
+                            // Verificar que no sea CVU, CUIT, etc.
+                            if (!bancoLine.toLowerCase().contains("cvu") && 
+                                !bancoLine.toLowerCase().contains("cuit") && 
+                                !bancoLine.matches(".*\\d{10,}.*") && 
+                                bancoLine.length() > 5) {
+                                bancoReceptor = bancoLine;
+                                
+                                break;
+                            }
+                        }
                     }
                 }
             }
@@ -347,6 +405,7 @@ public class Bancor {
         System.out.println("[DEBUG BANCOR] Monto: " + monto);
         System.out.println("[DEBUG BANCOR] Banco Receptor: " + bancoReceptor);
         System.out.println("[DEBUG BANCOR] Titular: " + titular);
+        System.out.println("[DEBUG BANCOR] === FIN RESULTADO ===");
         
         
         TransferDTO transfer =  TransferDTO.builder().build();
@@ -354,7 +413,7 @@ public class Bancor {
         transfer.setTypeOFTransfer(tipoOperacion.isEmpty() ? null : tipoOperacion);
         transfer.setCuit(cuitEmisor.isEmpty() ? null : cuitEmisor);
         transfer.setAmount(monto.isEmpty() ? null : monto.replace("$", "").trim());
-        transfer.setBank(titular.isEmpty() ? null : titular);
+        transfer.setBank(bancoReceptor.isEmpty() ? null : bancoReceptor);
         transfer.setTitular(titular.isEmpty() ? null : titular);
         
         return transfer;
