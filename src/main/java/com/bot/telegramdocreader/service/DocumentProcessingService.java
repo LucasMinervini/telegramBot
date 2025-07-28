@@ -64,7 +64,8 @@ public class DocumentProcessingService {
     private static final String[] BRUBANK_PATTERNS = {"brubank", "envío de dinero a", "envio de dinero a", "transferencia enviada", "cbu / alias", "id operación", "id operacion", "casa de ahorro en pesos", "caja de ahorro en pesos"};
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro", "Control Nro."};
-    private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
+    private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça", "image.png", "banco de galicia", "banco galicia", "galicia s.a.u", "cuenta en banco de galicia"};
+    private static final String[] GALICIA_FALLBACK_PATTERNS = {"transferencia enviada", "cuenta en banco de galicia", "banco de galicia s.a.u"};
     private static final String[] SANTANDER_PATTERNS = {"santander", "santander rio", "santander río"};
     private static final String[] SANTANDER_FALLBACK_PATTERNS = {"Comprobante de transferencia", "CTA"};
     private static final String[] CUENTA_DNI_PATTERNS = {"cuenta dni", "cuentadni"};
@@ -518,7 +519,16 @@ public class DocumentProcessingService {
         boolean isBancor = detectBank(textoExtraido, doc.getFileName(), BANCOR_PATTERNS) || bancorByContent;
         boolean isNewMacroFormat = textoExtraido.contains("Control Nro.") || textoExtraido.contains("Operación Nro");
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS) || isNewMacroFormat;
-        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS);
+        boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS) || detectAllBanks(textoExtraido, GALICIA_FALLBACK_PATTERNS);
+        
+        // Debug para Galicia
+        System.out.println("=== DEBUG GALICIA DETECTION ===");
+        System.out.println("isGalicia: " + isGalicia);
+        System.out.println("Filename: " + doc.getFileName());
+        System.out.println("Text contains 'banco de galicia': " + textoExtraido.toLowerCase().contains("banco de galicia"));
+        System.out.println("Text contains 'galicia': " + textoExtraido.toLowerCase().contains("galicia"));
+        System.out.println("Text contains 'transferencia enviada': " + textoExtraido.toLowerCase().contains("transferencia enviada"));
+        System.out.println("================================");
         
         boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
         
