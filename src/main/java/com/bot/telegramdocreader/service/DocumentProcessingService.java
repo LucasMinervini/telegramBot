@@ -61,7 +61,7 @@ public class DocumentProcessingService {
     private static final String[] PERSONAL_PAY_PATTERNS = {"personal pay", "personalpay"};
     private static final String[] BBVA_PATTERNS = {"bbva", "b b v a", "banco bbva", "banco francés", "frances", "francés"};
     private static final String[] BANCO_PROVINCIA_PATTERNS = {"banco provincia", "provincia"};
-    private static final String[] BRUBANK_PATTERNS = {"brubank", "envío de dinero a", "envio de dinero a", "transferencia enviada", "cbu / alias", "id operación", "id operacion", "casa de ahorro en pesos"};
+    private static final String[] BRUBANK_PATTERNS = {"brubank", "envío de dinero a", "envio de dinero a", "transferencia enviada", "cbu / alias", "id operación", "id operacion", "casa de ahorro en pesos", "caja de ahorro en pesos"};
     private static final String[] NARANJAX_PATTERNS = {"naranjax"};
     private static final String[] MACRO_PATTERNS = {"macro","Macro","Banco Macro", "Control Nro."};
     private static final String[] GALICIA_PATTERNS = {"gali","galiça","galicia","galiça"};
@@ -524,6 +524,17 @@ public class DocumentProcessingService {
         
         // Inicializar isBrubank como false al principio
         boolean isBrubank = false;
+        
+        // Recorrer líneas para detectar "brubank"
+        String[] lineasTexto = textoExtraido.split("\r?\n");
+        for (int i = 0; i < lineasTexto.length; i++) {
+            String linea = lineasTexto[i];
+            if (linea.toLowerCase().contains("brubank")) {
+                isBrubank = true;
+                break;
+            }
+        }
+        
         boolean isCuentaDni = false;
         // Detectar Cuenta DNI por patrones característicos (más robusto)
         String textoLower = textoExtraido.toLowerCase();
@@ -607,10 +618,9 @@ public class DocumentProcessingService {
             return Prex.parsePrexTransfer(textoExtraido, doc);
         }
         
-        // Detección de Brubank al final para evitar interferencias
-        isBrubank = detectBank(textoExtraido, doc.getFileName(), BRUBANK_PATTERNS);
         
-        // Detección adicional de Brubank por patrones específicos
+        
+        //Lo Dejo ultimo para que no interrumpa el flujo
         if (!isBrubank) {
             
             // Normalizar texto para eliminar caracteres extraños del OCR
@@ -625,19 +635,7 @@ public class DocumentProcessingService {
             boolean tieneNumeroTransaccion = textoLower.matches(".*\\d{10}.*"); // Números de transacción largos típicos de Brubank
             boolean tieneBancoDestino = textoNormalizado.contains("banco destino");
             boolean tieneCuitFormato = textoLower.matches(".*\\d{2}-\\d{8}-\\d.*"); // CUIT en formato XX-XXXXXXXX-X
-            
-            // Debug: imprimir qué patrones se encontraron
-            System.out.println("=== DEBUG BRUBANK DETECTION ===");
-            System.out.println("Texto normalizado: " + textoNormalizado);
-            System.out.println("tieneEnvioDedinero: " + tieneEnvioDedinero);
-            System.out.println("tieneTransferenciaEnviada: " + tieneTransferenciaEnviada);
-            System.out.println("tieneCbuAlias: " + tieneCbuAlias);
-            System.out.println("tieneIdOperacion: " + tieneIdOperacion);
-            System.out.println("tieneCasaAhorro: " + tieneCasaAhorro);
-            System.out.println("tieneNumeroTransaccion: " + tieneNumeroTransaccion);
-            System.out.println("tieneBancoDestino: " + tieneBancoDestino);
-            System.out.println("tieneOrigen: " + tieneOrigen);
-            System.out.println("tieneCuitFormato: " + tieneCuitFormato);
+            boolean tieneOrigenBrubank = textoNormalizado.contains("origen"); // Redefinir tieneOrigen para el contexto de Brubank
             
             // Si tiene al menos 2 de estos patrones, es muy probable que sea Brubank
             int patronesEncontrados = 0;
@@ -648,14 +646,11 @@ public class DocumentProcessingService {
             if (tieneCasaAhorro) patronesEncontrados++;
             if (tieneNumeroTransaccion) patronesEncontrados++;
             if (tieneBancoDestino) patronesEncontrados++;
-            if (tieneOrigen) patronesEncontrados++;
+            if (tieneOrigenBrubank) patronesEncontrados++;
             if (tieneCuitFormato) patronesEncontrados++;
-            
-            System.out.println("Patrones encontrados: " + patronesEncontrados);
             
             if (patronesEncontrados >= 2) {
                 isBrubank = true;
-                System.out.println("DETECTADO COMO BRUBANK!");
             }
         }
         
@@ -1104,12 +1099,34 @@ private boolean detectBank(String texto, String fileName, String[] patterns) {
     String textoLower = texto.toLowerCase();
     String fileNameLower = fileName.toLowerCase();
     java.util.function.Function<String, String> normalize = s -> s.replaceAll("[^a-záéíóúñ]", "");
+    
+    // Debug para Brubank
+    if (patterns == BRUBANK_PATTERNS) {
+        System.out.println("=== DEBUG DETECTBANK BRUBANK ===");
+        System.out.println("Filename: " + fileName);
+        System.out.println("Filename lower: " + fileNameLower);
+        System.out.println("Filename normalized: " + normalize.apply(fileNameLower));
+    }
+    
     // Verificar en el nombre del archivo
     for (String pattern : patterns) {
-        if (normalize.apply(fileNameLower).contains(normalize.apply(pattern))) {
+        String patternNormalized = normalize.apply(pattern);
+        String fileNameNormalized = normalize.apply(fileNameLower);
+        
+        if (patterns == BRUBANK_PATTERNS) {
+            System.out.println("Checking pattern: " + pattern + " (normalized: " + patternNormalized + ")");
+            System.out.println("Against filename: " + fileNameNormalized);
+            System.out.println("Contains: " + fileNameNormalized.contains(patternNormalized));
+        }
+        
+        if (fileNameNormalized.contains(patternNormalized)) {
+            if (patterns == BRUBANK_PATTERNS) {
+                System.out.println("MATCH FOUND IN FILENAME!");
+            }
             return true;
         }
     }
+    
     // Verificar en las primeras líneas del texto 
     String[] lines = texto.split("\\r?\\n");
     for (int i = 0; i < Math.min(10, lines.length); i++) { // Aumentar a 10 líneas para Ualá
@@ -1117,16 +1134,28 @@ private boolean detectBank(String texto, String fileName, String[] patterns) {
         for (String pattern : patterns) {
             String patternNorm = normalize.apply(pattern);
             if (lineNormalize.contains(patternNorm) || containsApproxWord(lineNormalize, patternNorm, 1)) {
+                if (patterns == BRUBANK_PATTERNS) {
+                    System.out.println("MATCH FOUND IN TEXT LINE " + i + ": " + lines[i]);
+                }
                 return true;
             }
         }
     }
+    
     // Verificar en todo el texto con regex
     for (String pattern : patterns) {
         if (textoLower.matches("(?i).*\\b" + pattern.replace(" ", "\\s*") + "\\b.*")) {
+            if (patterns == BRUBANK_PATTERNS) {
+                System.out.println("MATCH FOUND IN REGEX!");
+            }
             return true;
         }
     }
+    
+    if (patterns == BRUBANK_PATTERNS) {
+        System.out.println("NO MATCH FOUND FOR BRUBANK");
+    }
+    
     return false;
 }
 

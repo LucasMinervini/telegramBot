@@ -2,6 +2,8 @@ package com.bot.telegramdocreader.service.banks;
 
 import com.bot.telegramdocreader.dto.TransferDTO;
 import org.telegram.telegrambots.meta.api.objects.Document;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 public class Brubank {
     
@@ -924,6 +926,14 @@ public class Brubank {
                     // Si no se puede parsear, dejamos el monto como está
                 }
             }
+        }
+        
+        // Si no se encontró fecha, usar la fecha de hoy como default
+        if (fecha.isEmpty()) {
+            LocalDate today = LocalDate.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            fecha = today.format(formatter);
+            System.out.println("No se encontró fecha en el documento, usando fecha de hoy: " + fecha);
         }
         
         return TransferDTO.builder()
