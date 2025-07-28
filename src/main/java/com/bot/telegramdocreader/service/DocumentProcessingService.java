@@ -55,7 +55,7 @@ public class DocumentProcessingService {
     
     // Patrones de detección de bancos
     private static final String[] UALA_PATTERNS = {"uala", "ualá", "uála", "ualla", "uálá", "uála", "ualla", "ualla transferencia", "ualá transferencia", "uála transferencia", "u a l a", "u a l á", "uálá transferencia", "uála transferencia", "ualla trans", "ualá trans", "uála trans", "ualla recibo", "ualá recibo", "uála recibo", "ualla comprobante", "ualá comprobante", "uála comprobante", "transferencia ualá", "transferencia uala", "recibo ualá", "recibo uala", "comprobante ualá", "comprobante uala"};
-    private static final String[] MERCADOPAGO_PATTERNS = {"mercadopago", "mpago", "mercado pago", "mercado_pago"};
+    private static final String[] MERCADOPAGO_PATTERNS = {"mercadopago", "mpago", "mercado pago", "mercado_pago", "mercedo pago"};
     private static final String[] BANCOR_PATTERNS = {"bancor", "banco de córdoba", "banco córdoba", "cordoba", "córdoba"};
     private static final String[] PREX_PATTERNS = {"prex"};
     private static final String[] PERSONAL_PAY_PATTERNS = {"personal pay", "personalpay"};
@@ -512,7 +512,7 @@ public class DocumentProcessingService {
         boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
         boolean isBNA = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
         boolean isPersonalPay = detectBank(textoExtraido, doc.getFileName(), PERSONAL_PAY_PATTERNS) || textoExtraido.toLowerCase().contains("enviaste dinero");
-        boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS) || textoExtraido.toLowerCase().contains("mercadopago") || textoExtraido.toLowerCase().contains("mercado pago") || textoExtraido.toLowerCase().contains("mpago");
+        boolean isMercadoPago = detectBank(textoExtraido, doc.getFileName(), MERCADOPAGO_PATTERNS) || textoExtraido.toLowerCase().contains("mercadopago") || textoExtraido.toLowerCase().contains("mercado pago") || textoExtraido.toLowerCase().contains("mercedo pago") || textoExtraido.toLowerCase().contains("mpago");
         boolean isNaranjaX = detectBank(textoExtraido, doc.getFileName(), NARANJAX_PATTERNS);
         boolean isBankProvincia = detectBank(textoExtraido, doc.getFileName(), BANCO_PROVINCIA_PATTERNS) || textoExtraido.toLowerCase().contains("nueva transferencia");
         boolean bancorByContent = detectBancorByContent(textoExtraido);

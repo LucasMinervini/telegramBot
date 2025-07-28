@@ -68,31 +68,85 @@ public class MercadoPago {
                 String value = original.replaceAll("[^0-9.,]", "").trim();
                 if (!value.isEmpty()) monto = value;
             }
+            // Detección específica para formato "$ 58.312"
+            if (monto.isEmpty() && original.matches(".*\\$\\s*[0-9]+(?:\\.[0-9]+)*.*")) {
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\$\\s*([0-9]+(?:\\.[0-9]+)*)").matcher(original);
+                if (matcher.find()) {
+                    monto = matcher.group(1);
+                }
+            }
             // Tipo de operación
             if ((lower.contains("transferencia") || lower.contains("enviaste") || lower.contains("envío") || lower.contains("comprobante de transferencia")) && tipoOperacion.isEmpty()) {
                 tipoOperacion = "Transferencia";
             }
-            // CUIT Emisor
-            if ((lower.contains("cuit emisor") || lower.contains("cuil emisor") || lower.contains("cuit del emisor") || lower.contains("cuil del emisor") || lower.startsWith("de") || lower.startsWith("De") ) && cuitEmisor.isEmpty()) {
+            // CUIT Emisor - Buscar en sección "De" antes de "Para"
+            if ((lower.contains("cuit emisor") || lower.contains("cuil emisor") || lower.contains("cuit del emisor") || lower.contains("cuil del emisor") || lower.startsWith("de") || lower.startsWith("De") ) && cuitEmisor.isEmpty() && !foundPara) {
                 String value = original.replaceAll("(?i)cuit emisor|cuil emisor|cuit del emisor|cuil del emisor", "").replace(":", "").replaceAll("[^0-9]", "").trim();
                 if (value.length() == 11) {
                     cuitEmisor = value.substring(0,2) + "-" + value.substring(2,10) + "-" + value.substring(10);
                 }
             }
-            // Buscar CUIT emisor en línea con 'CUIT/CUIL' antes de 'Para' (emisor)
-            if (cuitEmisor.isEmpty() && lower.contains("cuit/cuil") && !foundPara) {
-                String value = original.replaceAll("(?i)cuit/cuil", "").replace(":", "").replaceAll("[^0-9]", "").trim();
-                if (value.length() == 11) {
-                    cuitEmisor = value.substring(0,2) + "-" + value.substring(2,10) + "-" + value.substring(10);
+            // Buscar CUIT emisor en línea con 'CUIT/CUIL' o 'CUITÍCUL' antes de 'Para' (emisor)
+            if (cuitEmisor.isEmpty() && (lower.contains("cuit/cuil") || lower.contains("cuitícul") || lower.contains("cuiticul")) && !foundPara) {
+                // Buscar patrón con dos puntos y posible punto al final: 25:22885471.9
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}:\\d{8,9}(?:\\.\\d)?)").matcher(original);
+                if (matcher.find()) {
+                    String cuitConDosPuntos = matcher.group(1);
+                    // Remover el punto final si existe
+                    cuitConDosPuntos = cuitConDosPuntos.replaceAll("\\.\\d$", "");
+                    String[] partes = cuitConDosPuntos.split(":");
+                    if (partes.length == 2) {
+                        String parte1 = partes[0];
+                        String parte2 = partes[1];
+                        // Si la segunda parte tiene 8 dígitos, agregar un dígito verificador
+                        if (parte2.length() == 8) {
+                            parte2 = parte2 + "9"; // Usar 9 como dígito verificador por defecto
+                        }
+                        if (parte2.length() == 9) {
+                            cuitEmisor = parte1 + "-" + parte2.substring(0,8) + "-" + parte2.substring(8);
+                        }
+                    }
+                } else {
+                    // Fallback: formato tradicional sin dos puntos
+                    String value = original.replaceAll("(?i)cuit/cuil|cuitícul|cuiticul", "").replace(":", "").replaceAll("[^0-9]", "").trim();
+                    if (value.length() == 11) {
+                        cuitEmisor = value.substring(0,2) + "-" + value.substring(2,10) + "-" + value.substring(10);
+                    }
                 }
             }
-            // Fallback: buscar CUIT emisor en cualquier línea antes de 'Para'
+            // Fallback: buscar CUIT emisor con formato de dos puntos antes de 'Para'
+            if (cuitEmisor.isEmpty() && !foundPara) {
+                java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}:\\d{8,9}(?:\\.\\d)?)").matcher(original);
+                if (matcher.find()) {
+                    String cuitConDosPuntos = matcher.group(1);
+                    // Remover el punto final si existe
+                    cuitConDosPuntos = cuitConDosPuntos.replaceAll("\\.\\d$", "");
+                    String[] partes = cuitConDosPuntos.split(":");
+                    if (partes.length == 2) {
+                        String parte1 = partes[0];
+                        String parte2 = partes[1];
+                        // Si la segunda parte tiene 8 dígitos, agregar un dígito verificador
+                        if (parte2.length() == 8) {
+                            parte2 = parte2 + "9"; // Usar 9 como dígito verificador por defecto
+                        }
+                        if (parte2.length() == 9) {
+                            cuitEmisor = parte1 + "-" + parte2.substring(0,8) + "-" + parte2.substring(8);
+                        }
+                    }
+                }
+            }
+            // Fallback: buscar CUIT emisor con formato tradicional antes de 'Para'
             if (cuitEmisor.isEmpty() && lower.matches(".*\\d{2}-\\d{8}-\\d{1}.*") && !foundPara) {
                 java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{2}-\\d{8}-\\d{1})").matcher(original);
                 if (matcher.find()) cuitEmisor = matcher.group(1);
             }
             
-            if (lower.matches("^[^a-zA-Z0-9]*para(\\s|:|$)") || lower.matches("^[^a-zA-Z0-9]*pera(\\s|:|$)")) {
+            // Detectar "Para" con cualquier símbolo delante (>, +, », etc.) y variaciones OCR como "pera"
+            if (lower.matches("^[^a-zA-Z0-9]*p[ae]ra(\\s|:|$)") || 
+                lower.matches(".*[>+»\\-_=*#@!&%\\$\\^~`\\[\\]{}\\(\\)\\|\\\\/<.,;:\"'?]\\s*p[ae]ra(\\s|:|$)") ||
+                lower.trim().matches("^[>+»\\-_=*#@!&%\\$\\^~`\\[\\]{}\\(\\)\\|\\\\/<.,;:\"'?]+\\s*p[ae]ra$") ||
+                lower.contains("> pera") || lower.contains("+ pera") || lower.contains("» pera") ||
+                lower.contains(">pera") || lower.contains("+pera") || lower.contains("»pera")) {
                 foundPara = true;
                 paraIndex = i;
                 continue;
