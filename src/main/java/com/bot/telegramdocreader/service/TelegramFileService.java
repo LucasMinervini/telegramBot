@@ -37,7 +37,7 @@ public class TelegramFileService {
                 t.getDate().equals(transferencia.getDate()) &&
                 t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
                 t.getCuit().equals(transferencia.getCuit()) &&
-                t.getAmount().equals(transferencia.getAmount()) &&
+                t.getAmount().equals("$" + transferencia.getAmount()) &&
                 t.getBank().equals(transferencia.getBank())
             );
             if (esDuplicada) {
@@ -134,7 +134,7 @@ public class TelegramFileService {
                 cuitCell.setCellStyle(dataStyle);
 
                 Cell amountCell = row.createCell(3);
-                amountCell.setCellValue(transferencia.getAmount());
+                amountCell.setCellValue("$" + transferencia.getAmount());
                 amountCell.setCellStyle(dataStyle);
 
                 bankCell.setCellStyle(dataStyle);
