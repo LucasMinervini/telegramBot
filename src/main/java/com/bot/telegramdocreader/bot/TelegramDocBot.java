@@ -77,14 +77,25 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             Message message = update.getMessage();
             Long chatId = message.getChatId();
 
-            if (message.hasText() && message.getText().equals("/start")) {
-                ClientsDTO client = mapClient.computeIfAbsent(chatId, id ->
-                    ClientsDTO.builder()
-                        .chatId(id)
-                        .name(message.getFrom().getFirstName())
-                        .build()
-                );
-                sendTextMessage(chatId, "¡Hola " + client.getName() + "! 👋 Ya estás listo para enviar comprobantes. Mandame una imagen o PDF para procesar.");
+            if (message.hasText()) {
+                String messageText = message.getText();
+                if (messageText.equals("/start")) {
+                    ClientsDTO client = mapClient.computeIfAbsent(chatId, id ->
+                        ClientsDTO.builder()
+                            .chatId(id)
+                            .name(message.getFrom().getFirstName())
+                            .build()
+                    );
+                    sendTextMessage(chatId, "¡Hola " + client.getName() + "! 👋 Ya estás listo para enviar comprobantes. Mandame una imagen o PDF para procesar.");
+                } else if (messageText.equals("/limpiar")) {
+                    // Limpiar la lista de transferencias
+                    String resultado = telegramFileService.clearTransferencias();
+                    sendTextMessage(chatId, resultado);
+                } else if (messageText.equals("/status")) {
+                    // Mostrar el número de transferencias acumuladas
+                    int count = telegramFileService.getTransferenciasCount();
+                    sendTextMessage(chatId, "Actualmente hay " + count + " transferencias en memoria.");
+                }
             } else if (message.hasDocument()) {
                 handleDocumentMessage(update);
             } else if (message.hasPhoto()) {
@@ -127,9 +138,17 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             saveButton.setText("Guardar Excel");
             saveButton.setCallbackData("save_excel");
 
+          /*  InlineKeyboardButton clearButton = new InlineKeyboardButton();
+            clearButton.setText("Limpiar transferencias");
+            clearButton.setCallbackData("clear_transfers");
+            */ 
             rowInline.add(downloadButton);
             rowInline.add(saveButton);
+            
+            List<InlineKeyboardButton> rowInline2 = new ArrayList<>();
+           // rowInline2.add(clearButton);
             rowsInline.add(rowInline);
+            rowsInline.add(rowInline2);
             markupInline.setKeyboard(rowsInline);
 
             // Enviar mensaje con los botones
@@ -232,6 +251,13 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                         sendDocument.setDocument(new InputFile(excelFile));
                         sendDocument.setCaption("Archivo Excel concatenado generado");
                         execute(sendDocument);
+                        
+                        // Eliminar el archivo Excel después de enviarlo
+                        if (excelFile.delete()) {
+                            System.out.println("Archivo Excel concatenado eliminado después de la descarga: " + excelFilePath);
+                        } else {
+                            System.out.println("No se pudo eliminar el archivo Excel concatenado: " + excelFilePath);
+                        }
                     } else {
                         execute(new SendMessage(chatId, "Error: No se pudo encontrar el archivo Excel concatenado."));
                     }
@@ -251,6 +277,10 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                 } else {
                     execute(new SendMessage(chatId, excelFilePath));
                 }
+            } else if ("clear_transfers".equals(callbackData)) {
+                // Limpiar la lista de transferencias
+                String resultado = telegramFileService.clearTransferencias();
+                execute(new SendMessage(chatId, resultado));
             }
         } catch (Exception e) {
             e.printStackTrace();

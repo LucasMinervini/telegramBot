@@ -27,32 +27,6 @@ public class Brubank {
             }
         }
         
-        // Formatear el banco receptor según los requisitos específicos
-        String bancoReceptor = "";
-        if (transferencia.getBank() != null && !transferencia.getBank().isEmpty()) {
-            String banco = transferencia.getBank();
-            
-            // Verificar si es uno de los bancos específicos que deben mantenerse en mayúsculas
-            if (banco.toUpperCase().contains("TECNO SZ")) {
-                bancoReceptor = "TECNO SZ SA";
-            } else if (banco.toUpperCase().contains("COCOS CAPITAL")) {
-                bancoReceptor = "COCOS CAPITAL SA";
-            } else {
-                // Para otros bancos, formatear con primera letra mayúscula
-                String[] palabras = banco.split("\\s+");
-                StringBuilder bancoFormateado = new StringBuilder();
-                for (String palabra : palabras) {
-                    if (!palabra.isEmpty()) {
-                        bancoFormateado.append(palabra.substring(0, 1).toUpperCase());
-                        if (palabra.length() > 1) {
-                            bancoFormateado.append(palabra.substring(1).toLowerCase());
-                        }
-                        bancoFormateado.append(" ");
-                    }
-                }
-                bancoReceptor = bancoFormateado.toString().trim();
-            }
-        }
         
         // Formatear el monto para asegurar que tenga el formato correcto
         String monto = transferencia.getAmount() != null ? transferencia.getAmount() : "";
@@ -68,7 +42,7 @@ public class Brubank {
                 transferencia.getTypeOFTransfer() != null ? transferencia.getTypeOFTransfer() : "",
                 cuit,
                 monto,
-                bancoReceptor);
+                transferencia.getBank() != null ? transferencia.getBank() : "");
     }
 
     public static TransferDTO parseBrubankTransfer(String textoExtraido, Document doc) {
@@ -270,7 +244,11 @@ public class Brubank {
                     // CORRECCIÓN: Si detectamos EMEATES, corregir a FARGOTEZ SA
                     if (original.contains("EMEATES") || original.contains("E EMEATES")) {
                         bancoDestino = "FARGOTEZ SA";
-                        System.out.println("EMEATES detectado en empresas con sufijos - corrigiendo a FARGOTEZ SA");
+                        
+                    }
+                    // DETECCIÓN ESPECÍFICA: Buscar TECNO SZ SA
+                    else if (original.contains("TECNO SZ") || original.contains("TECNO SZ SA")) {
+                        bancoDestino = "TECNO SZ SA";
                     } else {
                         bancoDestino = original.trim();
                     }
@@ -289,13 +267,17 @@ public class Brubank {
                          !lower.contains("número") && 
                          !lower.contains("numero") &&
                          !original.matches(".*[0-9]{2}-[0-9]{8}-[0-9].*") && // Excluir CUITs
-                         !original.matches(".*[0-9]{11,}.*") && // Excluir números largos
-                         !isPersonName(original)) { // Excluir nombres de personas
+                         !original.matches(".*[0-9]{11,}.*") ) { // Excluir nombres de personas
                     
                     // CORRECCIÓN: Si detectamos EMEATES, corregir a FARGOTEZ SA
                     if (original.contains("EMEATES") || original.contains("E EMEATES")) {
                         bancoDestino = "FARGOTEZ SA";
                         System.out.println("EMEATES detectado en nombres en mayúsculas - corrigiendo a FARGOTEZ SA");
+                    }
+                    // DETECCIÓN ESPECÍFICA: Buscar TECNO SZ SA
+                    else if (original.contains("TECNO SZ") || original.contains("TECNO SZ SA")) {
+                        bancoDestino = "TECNO SZ SA";
+                        System.out.println("TECNO SZ SA detectado en nombres en mayúsculas");
                     } else {
                         bancoDestino = original.trim();
                     }
@@ -322,6 +304,11 @@ public class Brubank {
                             bancoDestino = "FARGOTEZ SA";
                             System.out.println("EMEATES detectado en detección inicial - corrigiendo a FARGOTEZ SA");
                         }
+                    } 
+                    // DETECCIÓN ESPECÍFICA: Buscar TECNO SZ SA
+                    else if (original.contains("TECNO SZ") || original.contains("TECNO SZ SA")) {
+                        bancoDestino = "TECNO SZ SA";
+                        System.out.println("TECNO SZ SA detectado");
                     } else {
                         bancoDestino = original;
                     }
@@ -436,8 +423,7 @@ public class Brubank {
                                 !lineUpper.contains("TRANSFERENCIA") &&
                                 !lineUpper.contains("$") &&
                                 !lineUpper.matches(".*[0-9]{10,}.*") && // Excluir números largos
-                                !lineUpper.matches(".*[0-9]{2}-[0-9]{8}-[0-9].*") && // Excluir CUITs
-                                !isPersonName(lineUpper)) {
+                                !lineUpper.matches(".*[0-9]{2}-[0-9]{8}-[0-9].*") ) {
                                 
                                 // Si encontramos texto que podría ser una empresa corrupta
                                 if (lineUpper.matches("^[A-Z0-9\\s]{4,}$")) {
@@ -462,8 +448,8 @@ public class Brubank {
                         
                         // Si aún no se encontró, usar valor por defecto inteligente
                         if (bancoDestino.isEmpty()) {
-                            bancoDestino = "FARGOTEZ SA"; // Valor más probable basado en contexto
-                            System.out.println("Banco inferido por defecto: FARGOTEZ SA");
+                            bancoDestino = ""; // Valor más probable basado en contexto
+                            
                         }
                     }
                 }
@@ -524,6 +510,14 @@ public class Brubank {
                             System.out.println("FARGOTEZ detectado en línea corrupta: " + line);
                             break;
                         }
+                        // DETECCIÓN ESPECÍFICA: Buscar TECNO SZ SA incluso en texto corrupto
+                        else if (lineUpper.contains("TECNO") || lineUpper.contains("TECN0") || 
+                                lineUpper.contains("TECN") || lineUpper.contains("TECN SZ") || 
+                                lineUpper.contains("TECNO SZ") || lineUpper.contains("TECNO SZ SA")) {
+                            bancoDestino = "TECNO SZ SA";
+                            System.out.println("TECNO SZ SA detectado en línea corrupta: " + line);
+                            break;
+                        }
                     }
                 }
                 
@@ -543,11 +537,6 @@ public class Brubank {
                                 if (dia.length() == 1) dia = "0" + dia;
                                 fecha = dia + "/06/2025";
                                 System.out.println("Fecha extraída de texto: " + fecha);
-                                break;
-                            } else {
-                                // Si no se puede extraer el día, usar fecha por defecto de junio 2025
-                                fecha = "24/06/2025";
-                                System.out.println("Fecha inferida por defecto: " + fecha);
                                 break;
                             }
                         }
@@ -600,9 +589,8 @@ public class Brubank {
                     }
                     
                     // Buscar específicamente "COCOS CAPITAL SA"
-                    if (lineUpper.contains("COCOS") && lineUpper.contains("CAPITAL") && lineUpper.contains("SA")) {
-                        empresaLimpia = "COCOS CAPITAL SA";
-                        System.out.println("COCOS CAPITAL SA detectado específicamente");
+                    if (lineUpper.contains("COCOS") && lineUpper.contains("CAPITAL") && lineUpper.contains("SA") || lineUpper.contains("COCOS CAPITAL SA")) {
+                        bancoDestino = "Cocos Capital S.A";
                         break;
                     }
                     
@@ -610,6 +598,15 @@ public class Brubank {
                     if (lineUpper.contains("FARGO") && lineUpper.contains("SA")) {
                         empresaLimpia = "FARGOTEZ SA";
                         System.out.println("FARGOTEZ SA detectado específicamente");
+                        break;
+                    }
+                    
+                    // Buscar específicamente "TECNO SZ SA"
+                    if ((lineUpper.contains("TECNO") || lineUpper.contains("TECN0")) && 
+                        (lineUpper.contains("SZ") || lineUpper.contains("S2")) && 
+                        lineUpper.contains("SA")) {
+                        empresaLimpia = "TECNO SZ SA";
+                        System.out.println("TECNO SZ SA detectado específicamente");
                         break;
                     }
                     
@@ -737,29 +734,12 @@ public class Brubank {
                         // Buscar patrones normales también
                         String cleanLineNormal = line.replaceAll("[^0-9.,]", "");
                         
-                        // Buscar patrones que parezcan montos (20000,00 o 20.000,00)
-                        if (cleanLineNormal.matches("[0-9]{5,6},[0-9]{2}")) {
-                            String montoTemp = cleanLineNormal;
-                            // Formatear con punto de miles
-                            if (montoTemp.length() >= 7) {
-                                String parteEntera = montoTemp.substring(0, montoTemp.length() - 3);
-                                String parteDecimal = montoTemp.substring(montoTemp.length() - 3);
-                                if (parteEntera.length() > 3) {
-                                    monto = parteEntera.substring(0, parteEntera.length() - 3) + "." + 
-                                           parteEntera.substring(parteEntera.length() - 3) + parteDecimal;
-                                } else {
-                                    monto = parteEntera + parteDecimal;
-                                }
-                            }
-                            System.out.println("Monto inferido (patrón normal): " + monto);
-                            break;
-                        }
-                        
+                       
+
                         // Buscar números de 4-6 dígitos que puedan ser montos sin decimales
                         if (cleanLineNormal.matches("[0-9]{4,6}")) {
                             String numeroEncontrado = cleanLineNormal;
                             
-                            // CORRECCIÓN: Validar que el número sea razonable antes de formatearlo
                             // Si encontramos 42222, es probable que sea un error de OCR de 20000
                             if (numeroEncontrado.equals("42222")) {
                                 monto = "20.000,00"; // Corregir al valor esperado
@@ -793,21 +773,6 @@ public class Brubank {
                         }
                     }
                 }
-                
-                // NÚMERO DE TRANSACCIÓN
-                if (transactionNumber.isEmpty()) {
-                    for (String line : lines) {
-                        String cleanLine = line.replaceAll("[^0-9.,]", "");
-                        
-                        // Buscar números largos que puedan ser números de transacción
-                        if (cleanLine.matches("[0-9]{10,12}")) {
-                            transactionNumber = cleanLine;
-                            System.out.println("Número de transacción inferido: " + transactionNumber);
-                            break;
-                        }
-                    }
-                }
-                
                 // FECHA: Buscar fecha en formato corrupto como "O4/OS/2O2S"
                 if (fecha.isEmpty()) {
                     for (String line : lines) {
@@ -891,21 +856,17 @@ public class Brubank {
                              !lower.contains("monto") && 
                              !lower.contains("número") && 
                              !lower.contains("numero") &&
-                             !original.matches(".*[0-9].*") &&
-                             !isPersonName(original)) { // Excluir nombres de personas
+                             !original.matches(".*[0-9].*") 
+                             ) { 
                         bancoDestino = original.trim();
                         break;
                     }
                 }
-                
-                // Si aún no se encontró, usar un valor por defecto
-                if (bancoDestino.isEmpty()) {
-                    bancoDestino = "Empresa no identificada";
-                }
+            
             }
         }
         
-        // Formatear el monto para asegurar que tenga el formato correcto (137.000,00)
+        // Formatear el monto ejemplo: 137.000,00
         if (!monto.isEmpty()) {
             // Eliminar posibles espacios
             monto = monto.replaceAll("\\s+", "");
@@ -926,6 +887,42 @@ public class Brubank {
             }
         }
         
+        // Verificar si el texto contiene referencias a TECNO SZ SA (incluyendo OCR corrupto)
+        for (String line : lines) {
+            String lineUpper = line.toUpperCase();
+            // Patrones normales
+            if (lineUpper.contains("TECNO SZ") || lineUpper.contains("TECNO SZ SA") || 
+                (lineUpper.contains("TECNO") && lineUpper.contains("SZ") && lineUpper.contains("SA"))) {
+                bancoDestino = "TECNO SZ SA";
+                System.out.println("TECNO SZ SA detectado en verificación final");
+                break;
+            }
+            // Patrones corruptos comunes en OCR
+            else if (lineUpper.contains("TECNO") && 
+                     (lineUpper.contains("S$") || lineUpper.contains("S2") || 
+                      lineUpper.contains("52") || lineUpper.contains("5Z") || 
+                      lineUpper.contains("SZ") || lineUpper.contains("57"))) {
+                bancoDestino = "TECNO SZ SA";
+                System.out.println("TECNO SZ SA detectado en patrón OCR corrupto: " + line);
+                break;
+            }
+            // Detección específica para el patrón del ejemplo
+            else if (lineUpper.contains("TECNO") && lineUpper.contains("S$") && lineUpper.contains("I37")) {
+                bancoDestino = "TECNO SZ SA";
+                System.out.println("TECNO SZ SA detectado en patrón específico con monto");
+                break;
+            } 
+        }
+
+        for (String line : lines) {
+            String lineUpper = line.toUpperCase();
+
+            if (lineUpper.contains("COCOS") && lineUpper.contains("CAPITAL ") && lineUpper.contains("SA") || 
+                lineUpper.contains("COCOS CAPITAL SA")) {
+                bancoDestino = "Cocos Capital S.A";
+            }
+        }
+        
         return TransferDTO.builder()
                 .date(fecha)
                 .typeOFTransfer(tipoOperacion)
@@ -940,59 +937,5 @@ public class Brubank {
                 .build();
     }
     
-    /**
-     * Método para detectar si un texto es un nombre de persona física
-     * @param text El texto a analizar
-     * @return true si parece ser un nombre de persona, false si no
-     */
-    private static boolean isPersonName(String text) {
-        if (text == null || text.trim().isEmpty()) {
-            return false;
-        }
-        
-        String[] words = text.trim().split("\\s+");
-        
-        // Si tiene exactamente 2-4 palabras y cada una empieza con mayúscula, podría ser nombre de persona
-        if (words.length >= 2 && words.length <= 4) {
-            // Lista de nombres comunes argentinos para detectar nombres de personas
-            String[] nombresComunes = {
-                "MARTIN", "ALBERTO", "CARLOS", "JUAN", "JOSE", "LUIS", "MIGUEL", "ANTONIO", 
-                "FRANCISCO", "MANUEL", "PEDRO", "RAFAEL", "ANGEL", "ALEJANDRO", "DIEGO",
-                "MARIA", "ANA", "CARMEN", "LAURA", "ELENA", "PATRICIA", "ROSA", "MONICA",
-                "SILVIA", "CLAUDIA", "ADRIANA", "GABRIELA", "SUSANA", "BEATRIZ", "NADIA",
-                "ANTONELLA", "TORRES", "GARCIA", "RODRIGUEZ", "LOPEZ", "MARTINEZ", "GONZALEZ",
-                "FERNANDEZ", "PEREZ", "SANCHEZ", "ROMERO", "SOSA", "CONTRERAS", "SILVA",
-                "MENDEZ", "RUIZ", "ALVAREZ", "FLORES", "HERRERA", "MEDINA", "MORALES",
-                "POZZI", "ROSSI", "FERRARI", "BRUNO", "COSTA", "GRECO"
-            };
-            
-            // Verificar si alguna palabra coincide con nombres/apellidos comunes
-            for (String word : words) {
-                for (String nombreComun : nombresComunes) {
-                    if (word.toUpperCase().equals(nombreComun)) {
-                        return true;
-                    }
-                }
-            }
-            
-            // Si no coincide con nombres comunes pero tiene el patrón típico de nombre de persona
-            // (2-3 palabras, cada una con primera letra mayúscula y resto minúscula)
-            boolean esPatronNombre = true;
-            for (String word : words) {
-                if (!word.matches("^[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]+$")) {
-                    esPatronNombre = false;
-                    break;
-                }
-            }
-            
-            // Si tiene patrón de nombre y no contiene palabras típicas de empresas
-            if (esPatronNombre && !text.toUpperCase().contains("SA") && 
-                !text.toUpperCase().contains("SRL") && !text.toUpperCase().contains("LTDA") &&
-                !text.toUpperCase().contains("CORP") && !text.toUpperCase().contains("INC")) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
+    
 }

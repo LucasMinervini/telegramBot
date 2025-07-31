@@ -86,7 +86,7 @@ public class ExportExcel {
         cuitCell.setCellStyle(dataStyle);
 
         Cell amountCell = dataRow.createCell(3);
-        amountCell.setCellValue(transfer.getAmount());
+        amountCell.setCellValue("$" + transfer.getAmount());
         amountCell.setCellStyle(dataStyle);
 
         Cell bankCell = dataRow.createCell(4);
