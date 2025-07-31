@@ -232,6 +232,13 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                         sendDocument.setDocument(new InputFile(excelFile));
                         sendDocument.setCaption("Archivo Excel concatenado generado");
                         execute(sendDocument);
+                        
+                        // Eliminar el archivo Excel después de enviarlo
+                        if (excelFile.delete()) {
+                            System.out.println("Archivo Excel concatenado eliminado después de la descarga: " + excelFilePath);
+                        } else {
+                            System.out.println("No se pudo eliminar el archivo Excel concatenado: " + excelFilePath);
+                        }
                     } else {
                         execute(new SendMessage(chatId, "Error: No se pudo encontrar el archivo Excel concatenado."));
                     }
