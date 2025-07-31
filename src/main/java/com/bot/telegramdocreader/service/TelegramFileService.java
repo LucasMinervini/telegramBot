@@ -37,16 +37,16 @@ public class TelegramFileService {
                 t.getDate().equals(transferencia.getDate()) &&
                 t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
                 t.getCuit().equals(transferencia.getCuit()) &&
-                t.getAmount().equals("$" + transferencia.getAmount()) &&
+                (t.getAmount().equals(transferencia.getAmount()) || t.getAmount().equals("$" + transferencia.getAmount())) &&
                 t.getBank().equals(transferencia.getBank())
             );
             if (esDuplicada) {
-                // Permitir guardar el Excel aunque sea duplicada, pero informar al usuario
+                // No agregar la transferencia duplicada a la lista
                 String excelFilePath = ExportExcel.exportTransferToExcel(transferencia);
                 ExportExcel.saveExcelFile();
                 return "Advertencia: La transferencia ya ha sido procesada, pero el archivo Excel se guardó nuevamente en: " + excelFilePath;
             }
-            // Agregar la transferencia a la lista
+            // Agregar la transferencia a la lista solo si no es duplicada
             this.transferencias.add(transferencia);
             // Generar y guardar un archivo Excel único para cada transferencia
             String excelFilePath = ExportExcel.exportTransferToExcel(transferencia);
@@ -105,9 +105,30 @@ public class TelegramFileService {
                 cell.setCellStyle(headerStyle);
             }
 
-            // Agregar datos de todas las transferencias
-            int rowNum = 1;
+            // Eliminar duplicados antes de agregar al Excel
+            List<TransferDTO> transferenciasUnicas = new ArrayList<>();
             for (TransferDTO transferencia : transferencias) {
+                boolean yaExiste = false;
+                for (TransferDTO unica : transferenciasUnicas) {
+                    if (unica.getDate().equals(transferencia.getDate()) &&
+                        unica.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
+                        unica.getCuit().equals(transferencia.getCuit()) &&
+                        (unica.getAmount().equals(transferencia.getAmount()) || 
+                         unica.getAmount().equals("$" + transferencia.getAmount()) ||
+                         ("$" + unica.getAmount()).equals(transferencia.getAmount())) &&
+                        unica.getBank().equals(transferencia.getBank())) {
+                        yaExiste = true;
+                        break;
+                    }
+                }
+                if (!yaExiste) {
+                    transferenciasUnicas.add(transferencia);
+                }
+            }
+
+            // Agregar datos de las transferencias únicas
+            int rowNum = 1;
+            for (TransferDTO transferencia : transferenciasUnicas) {
                 Row row = sheet.createRow(rowNum++);
                 Cell dateCell = row.createCell(0);
                 dateCell.setCellValue(transferencia.getDate());
@@ -164,6 +185,9 @@ public class TelegramFileService {
                 }
             }
 
+            // Limpiar la lista de transferencias después de crear el Excel concatenado
+            this.transferencias.clear();
+
             return fileName;
 
         } catch (Exception e) {
@@ -173,6 +197,24 @@ public class TelegramFileService {
 
     public String uploadToDrive(String filePath) {
         return googleDriveService.uploadFile(filePath, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    }
+    
+    /**
+     * Limpia la lista de transferencias acumuladas
+     * @return Mensaje indicando que se han limpiado las transferencias
+     */
+    public String clearTransferencias() {
+        int cantidad = this.transferencias.size();
+        this.transferencias.clear();
+        return "Se han eliminado " + cantidad + " transferencias de la memoria.";
+    }
+    
+    /**
+     * Obtiene el número de transferencias acumuladas actualmente
+     * @return Número de transferencias
+     */
+    public int getTransferenciasCount() {
+        return this.transferencias.size();
     }
 
     public java.io.File downloadFileByFileId(String fileId, String botToken) throws IOException {
