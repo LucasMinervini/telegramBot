@@ -8,6 +8,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -46,25 +47,25 @@ public class TelegramFileService {
                 // Si se proporciona chatId, verificar duplicados solo en ese chat
                 List<TransferDTO> transferenciasChat = transferenciasByChatId.getOrDefault(chatId, new ArrayList<>());
                 esDuplicada = transferenciasChat.stream().anyMatch(t ->
-                    t.getDate().equals(transferencia.getDate()) &&
-                    t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
-                    t.getCuit().equals(transferencia.getCuit()) &&
-                    (t.getAmount().equals(transferencia.getAmount()) || t.getAmount().equals("$" + transferencia.getAmount())) &&
-                    t.getBank().equals(transferencia.getBank())
+                    Objects.equals(t.getDate(), transferencia.getDate()) &&
+                    Objects.equals(t.getTypeOFTransfer(), transferencia.getTypeOFTransfer()) &&
+                    Objects.equals(t.getCuit(), transferencia.getCuit()) &&
+                    (Objects.equals(t.getAmount(), transferencia.getAmount()) || Objects.equals(t.getAmount(), "$" + transferencia.getAmount())) &&
+                    Objects.equals(t.getBank(), transferencia.getBank())
                 );
             } else {
                 // Si no se proporciona chatId, verificar en todas las transferencias
                 for (List<TransferDTO> transferenciasChat : transferenciasByChatId.values()) {
                     if (transferenciasChat.stream().anyMatch(t ->
-                        t.getDate().equals(transferencia.getDate()) &&
-                        t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
-                        t.getCuit().equals(transferencia.getCuit()) &&
-                        (t.getAmount().equals(transferencia.getAmount()) || t.getAmount().equals("$" + transferencia.getAmount())) &&
-                        t.getBank().equals(transferencia.getBank())
-                    )) {
-                        esDuplicada = true;
-                        break;
-                    }
+                    Objects.equals(t.getDate(), transferencia.getDate()) &&
+                    Objects.equals(t.getTypeOFTransfer(), transferencia.getTypeOFTransfer()) &&
+                    Objects.equals(t.getCuit(), transferencia.getCuit()) &&
+                    (Objects.equals(t.getAmount(), transferencia.getAmount()) || Objects.equals(t.getAmount(), "$" + transferencia.getAmount())) &&
+                    Objects.equals(t.getBank(), transferencia.getBank())
+                )) {
+                    esDuplicada = true;
+                    break;
+                }
                 }
             }
             
@@ -207,13 +208,13 @@ public class TelegramFileService {
             for (TransferDTO transferencia : todasLasTransferencias) {
                 boolean yaExiste = false;
                 for (TransferDTO unica : transferenciasUnicas) {
-                    if (unica.getDate().equals(transferencia.getDate()) &&
-                        unica.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
-                        unica.getCuit().equals(transferencia.getCuit()) &&
-                        (unica.getAmount().equals(transferencia.getAmount()) || 
-                         unica.getAmount().equals("$" + transferencia.getAmount()) ||
-                         ("$" + unica.getAmount()).equals(transferencia.getAmount())) &&
-                        unica.getBank().equals(transferencia.getBank())) {
+                    if (Objects.equals(unica.getDate(), transferencia.getDate()) &&
+                        Objects.equals(unica.getTypeOFTransfer(), transferencia.getTypeOFTransfer()) &&
+                        Objects.equals(unica.getCuit(), transferencia.getCuit()) &&
+                        (Objects.equals(unica.getAmount(), transferencia.getAmount()) || 
+                         Objects.equals(unica.getAmount(), "$" + transferencia.getAmount()) ||
+                         Objects.equals("$" + unica.getAmount(), transferencia.getAmount())) &&
+                        Objects.equals(unica.getBank(), transferencia.getBank())) {
                         yaExiste = true;
                         break;
                     }
@@ -246,7 +247,18 @@ public class TelegramFileService {
                     cuitCell.setCellValue(transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "");
                     bankCell.setCellValue(transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
                 } else {
-                    cuitCell.setCellValue(transferencia.getCuit());
+                    // Si no hay CUIT pero hay titular, usar el nombre del titular
+                    if ((transferencia.getCuit() == null || transferencia.getCuit().isEmpty())) {
+                        if (transferencia.getTitular() != null && !transferencia.getTitular().isEmpty()) {
+                            cuitCell.setCellValue(transferencia.getTitular());
+                        } else if (transferencia.getTitularCuentaDestino() != null && !transferencia.getTitularCuentaDestino().isEmpty()) {
+                            cuitCell.setCellValue(transferencia.getTitularCuentaDestino());
+                        } else {
+                            cuitCell.setCellValue(transferencia.getCuit());
+                        }
+                    } else {
+                        cuitCell.setCellValue(transferencia.getCuit());
+                    }
                     bankCell.setCellValue(transferencia.getBank());
                 }
                 cuitCell.setCellStyle(dataStyle);
@@ -284,17 +296,28 @@ public class TelegramFileService {
             fileOut.close();
             System.out.println("Excel concatenado creado exitosamente en: " + excelFile.getAbsolutePath());
 
+            // Eliminar los archivos Excel anteriores después de crear el nuevo
             if (excelFiles != null) {
                 for (File file : excelFiles) {
-                    if (!excelFile.delete()) {
-                        System.out.println("No se pudo eliminar el archivo: " + excelFile.getName());
+                    if (!file.delete()) {
+                        System.out.println("No se pudo eliminar el archivo anterior: " + file.getName());
+                    } else {
+                        System.out.println("Archivo anterior eliminado: " + file.getName());
                     }
                 }
             }
 
-            // Ya no limpiamos todas las transferencias después de crear el Excel concatenado
-            // Solo registramos que se ha creado el archivo
-            System.out.println("Excel concatenado creado sin limpiar transferencias: " + fileName);
+            // Limpiamos todas las transferencias después de crear el Excel concatenado
+            if (chatId != null) {
+                // Si se especificó un chatId, solo limpiamos las transferencias de ese chat
+                clearTransferencias(chatId);
+                System.out.println("Transferencias del chat " + chatId + " eliminadas después de crear el Excel concatenado");
+            } else {
+                // Si no se especificó chatId, limpiamos todas las transferencias
+                clearTransferencias();
+                System.out.println("Todas las transferencias eliminadas después de crear el Excel concatenado");
+            }
+            System.out.println("Excel concatenado creado y memoria limpiada: " + fileName);
             
             return fileName;
 
@@ -366,6 +389,35 @@ public class TelegramFileService {
             }
             return totalTransferencias;
         }
+    }
+    
+    /**
+     * Obtiene la lista de transferencias para un chat específico
+     * @param chatId ID del chat para el cual obtener las transferencias
+     * @return Lista de transferencias del chat especificado
+     */
+    public List<TransferDTO> getTransferenciasByChatId(Long chatId) {
+        if (chatId == null) {
+            return new ArrayList<>();
+        }
+        return this.transferenciasByChatId.getOrDefault(chatId, new ArrayList<>());
+    }
+    
+    /**
+     * Obtiene todas las transferencias acumuladas de todos los chats
+     * @return Lista con todas las transferencias
+     */
+    public List<TransferDTO> getAllTransferencias() {
+        // Si no hay transferencias, devolver lista vacía
+        if (transferenciasByChatId.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // Devolver todas las transferencias de todos los chatIds
+        List<TransferDTO> allTransfers = new ArrayList<>();
+        for (List<TransferDTO> transfers : transferenciasByChatId.values()) {
+            allTransfers.addAll(transfers);
+        }
+        return allTransfers;
     }
 
     public java.io.File downloadFileByFileId(String fileId, String botToken) throws IOException {
