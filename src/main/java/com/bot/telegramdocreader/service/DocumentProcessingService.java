@@ -32,8 +32,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -75,8 +76,8 @@ public class DocumentProcessingService {
     
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
-    private TransferDTO lastTransfer; // Almacenar la última transferencia procesada
-    private List<TransferDTO> transferencias = new ArrayList<>(); // Lista para acumular transferencias
+    private Map<Long, TransferDTO> lastTransferByChatId = new HashMap<>(); // Almacenar la última transferencia procesada por chatId
+    private Map<Long, List<TransferDTO>> transferenciasByChatId = new HashMap<>(); // Lista para acumular transferencias por chatId
     private TelegramFileService telegramFileService;
     
 
@@ -119,7 +120,11 @@ public class DocumentProcessingService {
                 if (isSantander) {
                     TransferDTO transferenciaSantander = Santander.parseSantanderTransfer(textoExtraido, doc);
                     if (transferenciaSantander != null) {
-                        lastTransfer = transferenciaSantander;
+                        lastTransferByChatId.put(chatId, transferenciaSantander);
+                        // Inicializar la lista si no existe para este chatId
+                        transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                        // Agregar la transferencia a la lista del chatId
+                        transferenciasByChatId.get(chatId).add(transferenciaSantander);
                         telegramFileService.createExcelFile(transferenciaSantander);
                         return Santander.formatSantander(transferenciaSantander);
                     }
@@ -129,7 +134,11 @@ public class DocumentProcessingService {
                 if (isCuentaDni) {
                     TransferDTO transferenciaDNI = CuentaDni.parseCuentaDniTransfer(textoExtraido, doc);
                     if (transferenciaDNI != null) {
-                        lastTransfer = transferenciaDNI;
+                        lastTransferByChatId.put(chatId, transferenciaDNI);
+                        // Inicializar la lista si no existe para este chatId
+                        transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                        // Agregar la transferencia a la lista del chatId
+                        transferenciasByChatId.get(chatId).add(transferenciaDNI);
                         telegramFileService.createExcelFile(transferenciaDNI);
                         return CuentaDni.formatCuentaDni(transferenciaDNI);
                     }
@@ -183,8 +192,12 @@ public class DocumentProcessingService {
                 if (isMercadoPago) {
                     TransferDTO transferenciaMP = MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
                     if (transferenciaMP != null) {
-                        lastTransfer = transferenciaMP;
-                        telegramFileService.createExcelFile(transferenciaMP);
+                        lastTransferByChatId.put(chatId, transferenciaMP);
+                        // Inicializar la lista si no existe para este chatId
+                        transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                        // Agregar la transferencia a la lista del chatId
+                        transferenciasByChatId.get(chatId).add(transferenciaMP);
+                        telegramFileService.createExcelFile(transferenciaMP, chatId);
                         try {
                             String excelResult = ExportExcel.exportTransferToExcel(transferenciaMP);
                             if (excelResult.startsWith("Error")) {
@@ -201,8 +214,12 @@ public class DocumentProcessingService {
                 // --- FIN LOG MERCADO PAGO ---
                 TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
                 if (isUala && transferencia != null) {
-                    lastTransfer = transferencia;
-                    telegramFileService.createExcelFile(transferencia);
+                    lastTransferByChatId.put(chatId, transferencia);
+                    // Inicializar la lista si no existe para este chatId
+                    transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                    // Agregar la transferencia a la lista del chatId
+                    transferenciasByChatId.get(chatId).add(transferencia);
+                    telegramFileService.createExcelFile(transferencia, chatId);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                         if (excelResult.startsWith("Error")) {
@@ -218,8 +235,12 @@ public class DocumentProcessingService {
                 }
                
                 if (transferencia != null) {
-                    lastTransfer = transferencia;
-                    telegramFileService.createExcelFile(transferencia);
+                    lastTransferByChatId.put(chatId, transferencia);
+                    // Inicializar la lista si no existe para este chatId
+                    transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                    // Agregar la transferencia a la lista del chatId
+                    transferenciasByChatId.get(chatId).add(transferencia);
+                    telegramFileService.createExcelFile(transferencia, chatId);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                         if (excelResult.startsWith("Error")) {
@@ -309,8 +330,12 @@ public class DocumentProcessingService {
                 if (isMercadoPago) {
                     TransferDTO transferenciaMP = MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
                     if (transferenciaMP != null) {
-                        lastTransfer = transferenciaMP;
-                        telegramFileService.createExcelFile(transferenciaMP);
+                        lastTransferByChatId.put(chatId, transferenciaMP);
+                        // Inicializar la lista si no existe para este chatId
+                        transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                        // Agregar la transferencia a la lista del chatId
+                        transferenciasByChatId.get(chatId).add(transferenciaMP);
+                        telegramFileService.createExcelFile(transferenciaMP, chatId);
                         try {
                             String excelResult = ExportExcel.exportTransferToExcel(transferenciaMP);
                             if (excelResult.startsWith("Error")) {
@@ -328,8 +353,12 @@ public class DocumentProcessingService {
                 System.out.println(textoExtraido);
                 
                 if (transferencia != null) {
-                    lastTransfer = transferencia;
-                    telegramFileService.createExcelFile(transferencia);
+                    lastTransferByChatId.put(chatId, transferencia);
+                    // Inicializar la lista si no existe para este chatId
+                    transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                    // Agregar la transferencia a la lista del chatId
+                    transferenciasByChatId.get(chatId).add(transferencia);
+                    telegramFileService.createExcelFile(transferencia, chatId);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                         if (excelResult.startsWith("Error")) {
@@ -503,8 +532,18 @@ public class DocumentProcessingService {
     }
 
 
+    public TransferDTO getLastTransfer(Long chatId) {
+        return this.lastTransferByChatId.get(chatId);
+    }
+    
+    // Método para obtener la última transferencia sin especificar chatId (compatibilidad)
     public TransferDTO getLastTransfer() {
-        return this.lastTransfer;
+        // Si no hay transferencias, devolver null
+        if (lastTransferByChatId.isEmpty()) {
+            return null;
+        }
+        // Devolver la última transferencia agregada (cualquier chatId)
+        return lastTransferByChatId.values().iterator().next();
     }
 
     private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
@@ -1065,9 +1104,23 @@ public class DocumentProcessingService {
         return fechaTexto;
     }
 
-// Método para obtener todas las transferencias acumuladas
+// Método para obtener todas las transferencias acumuladas para un chatId específico
+public List<TransferDTO> getTransferencias(Long chatId) {
+    return this.transferenciasByChatId.getOrDefault(chatId, new ArrayList<>());
+}
+
+// Método para obtener todas las transferencias acumuladas (compatibilidad)
 public List<TransferDTO> getTransferencias() {
-    return transferencias;
+    // Si no hay transferencias, devolver lista vacía
+    if (transferenciasByChatId.isEmpty()) {
+        return new ArrayList<>();
+    }
+    // Devolver todas las transferencias de todos los chatIds
+    List<TransferDTO> allTransfers = new ArrayList<>();
+    for (List<TransferDTO> transfers : transferenciasByChatId.values()) {
+        allTransfers.addAll(transfers);
+    }
+    return allTransfers;
 }
 
 public void handleDocumentMessage(Message message) {

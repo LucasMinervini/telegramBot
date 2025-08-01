@@ -3,7 +3,11 @@ package com.bot.telegramdocreader.service;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -14,13 +18,13 @@ import com.bot.telegramdocreader.dto.TransferDTO;
 @Service
 public class TelegramFileService {
 
-    private List<TransferDTO> transferencias;
+    private Map<Long, List<TransferDTO>> transferenciasByChatId;
     private static final String EXCEL_FOLDER = "excelsConcatenados/";
     private final GoogleDriveService googleDriveService;
 
     public TelegramFileService(GoogleDriveService googleDriveService) {
         this.googleDriveService = googleDriveService;
-        this.transferencias = new ArrayList<>();
+        this.transferenciasByChatId = new HashMap<>();
         // Crear el directorio si no existe
         new File(EXCEL_FOLDER).mkdirs();
     }
@@ -28,26 +32,56 @@ public class TelegramFileService {
 
 
     public String createExcelFile(TransferDTO transferencia) {
+        return createExcelFile(transferencia, null);
+    }
+    
+    public String createExcelFile(TransferDTO transferencia, Long chatId) {
         if (transferencia == null) {
             return "Error: No hay transferencia disponible";
         }
         try {
-            // Comparar duplicados considerando todos los campos relevantes
-            boolean esDuplicada = transferencias.stream().anyMatch(t ->
-                t.getDate().equals(transferencia.getDate()) &&
-                t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
-                t.getCuit().equals(transferencia.getCuit()) &&
-                (t.getAmount().equals(transferencia.getAmount()) || t.getAmount().equals("$" + transferencia.getAmount())) &&
-                t.getBank().equals(transferencia.getBank())
-            );
+            boolean esDuplicada = false;
+            
+            if (chatId != null) {
+                // Si se proporciona chatId, verificar duplicados solo en ese chat
+                List<TransferDTO> transferenciasChat = transferenciasByChatId.getOrDefault(chatId, new ArrayList<>());
+                esDuplicada = transferenciasChat.stream().anyMatch(t ->
+                    t.getDate().equals(transferencia.getDate()) &&
+                    t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
+                    t.getCuit().equals(transferencia.getCuit()) &&
+                    (t.getAmount().equals(transferencia.getAmount()) || t.getAmount().equals("$" + transferencia.getAmount())) &&
+                    t.getBank().equals(transferencia.getBank())
+                );
+            } else {
+                // Si no se proporciona chatId, verificar en todas las transferencias
+                for (List<TransferDTO> transferenciasChat : transferenciasByChatId.values()) {
+                    if (transferenciasChat.stream().anyMatch(t ->
+                        t.getDate().equals(transferencia.getDate()) &&
+                        t.getTypeOFTransfer().equals(transferencia.getTypeOFTransfer()) &&
+                        t.getCuit().equals(transferencia.getCuit()) &&
+                        (t.getAmount().equals(transferencia.getAmount()) || t.getAmount().equals("$" + transferencia.getAmount())) &&
+                        t.getBank().equals(transferencia.getBank())
+                    )) {
+                        esDuplicada = true;
+                        break;
+                    }
+                }
+            }
+            
             if (esDuplicada) {
                 // No agregar la transferencia duplicada a la lista
                 String excelFilePath = ExportExcel.exportTransferToExcel(transferencia);
                 ExportExcel.saveExcelFile();
                 return "Advertencia: La transferencia ya ha sido procesada, pero el archivo Excel se guardó nuevamente en: " + excelFilePath;
             }
+            
             // Agregar la transferencia a la lista solo si no es duplicada
-            this.transferencias.add(transferencia);
+            if (chatId != null) {
+                // Inicializar la lista si no existe para este chatId
+                transferenciasByChatId.computeIfAbsent(chatId, k -> new ArrayList<>());
+                // Agregar la transferencia a la lista del chatId
+                transferenciasByChatId.get(chatId).add(transferencia);
+            }
             // Generar y guardar un archivo Excel único para cada transferencia
             String excelFilePath = ExportExcel.exportTransferToExcel(transferencia);
             ExportExcel.saveExcelFile();
@@ -59,15 +93,63 @@ public class TelegramFileService {
         } catch (Exception e) {
             return "Error inesperado al procesar el archivo: " + e.getMessage();
         }
+        
     }
 
+    /**
+     * Verifica si hay transferencias disponibles para un chat específico
+     * @param chatId ID del chat a verificar
+     * @return true si hay transferencias para el chat, false en caso contrario
+     */
+    public boolean hasTransferenciasForChat(Long chatId) {
+        if (chatId == null) {
+            return false;
+        }
+        return transferenciasByChatId.containsKey(chatId) && !transferenciasByChatId.get(chatId).isEmpty();
+    }
+    
+    /**
+     * Crea un archivo Excel concatenado con todas las transferencias acumuladas
+     * @return Ruta del archivo Excel creado o mensaje de error
+     */
     public String createConcatenatedExcelFile() {
-        if (transferencias.isEmpty()) {
+        return createConcatenatedExcelFile(null);
+    }
+    
+    /**
+     * Crea un archivo Excel concatenado con las transferencias de un chat específico o todas si chatId es null
+     * @param chatId ID del chat para el cual crear el Excel, o null para incluir todas las transferencias
+     * @return Ruta del archivo Excel creado o mensaje de error
+     */
+    public String createConcatenatedExcelFile(Long chatId) {
+        // Si se especifica un chatId, verificamos que haya transferencias para ese chat
+        if (chatId != null && !hasTransferenciasForChat(chatId)) {
+            return "Error: No hay transferencias para concatenar en este chat.";
+        }
+        
+        // Si no se especifica chatId, verificamos que haya transferencias en general
+        if (chatId == null && transferenciasByChatId.isEmpty()) {
             return "Error: No hay transferencias para concatenar";
         }
 
-        File folder = new File("excelFolder");
+        File folder = new File(EXCEL_FOLDER);
+        if (!folder.exists()) {
+            folder.mkdirs();
+        }
         File[] excelFiles = folder.listFiles((dir, name) -> name.toLowerCase().endsWith(".xlsx"));
+
+        if (EXCEL_FOLDER.length() == 10) {
+            // Eliminar el archivo más antiguo si hay más de 10 archivos
+            if (excelFiles.length > 10) {
+                Arrays.sort(excelFiles, Comparator.comparing(File::lastModified));
+                File oldestFile = excelFiles[0];
+                if (oldestFile.delete()) {
+                    System.out.println("Archivo más antiguo eliminado: " + oldestFile.getName());
+                } else {
+                    System.out.println("No se pudo eliminar el archivo más antiguo: " + oldestFile.getName());
+                }
+            }
+        }
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Transferencias Concatenadas");
@@ -107,7 +189,22 @@ public class TelegramFileService {
 
             // Eliminar duplicados antes de agregar al Excel
             List<TransferDTO> transferenciasUnicas = new ArrayList<>();
-            for (TransferDTO transferencia : transferencias) {
+            // Recopilar las transferencias según el chatId
+            List<TransferDTO> todasLasTransferencias = new ArrayList<>();
+            if (chatId != null) {
+                // Si se especifica un chatId, solo incluimos las transferencias de ese chat
+                if (transferenciasByChatId.containsKey(chatId)) {
+                    todasLasTransferencias.addAll(transferenciasByChatId.get(chatId));
+                }
+            } else {
+                // Si no se especifica chatId, incluimos todas las transferencias
+                for (List<TransferDTO> transferenciasChat : transferenciasByChatId.values()) {
+                    todasLasTransferencias.addAll(transferenciasChat);
+                }
+            }
+            
+            // Filtrar duplicados
+            for (TransferDTO transferencia : todasLasTransferencias) {
                 boolean yaExiste = false;
                 for (TransferDTO unica : transferenciasUnicas) {
                     if (unica.getDate().equals(transferencia.getDate()) &&
@@ -172,25 +269,38 @@ public class TelegramFileService {
             }
 
             String timeStap = String.valueOf(System.currentTimeMillis());
+            File excelFolder = new File(EXCEL_FOLDER);
+            if (!excelFolder.exists()) {
+                boolean created = excelFolder.mkdirs();
+                if (!created) {
+                    System.out.println("No se pudo crear el directorio: " + EXCEL_FOLDER);
+                    return "Error: No se pudo crear el directorio para guardar el Excel";
+                }
+            }
             String fileName = EXCEL_FOLDER + "transferencias_concatenadas" + timeStap + ".xlsx";
-            java.io.FileOutputStream fileOut = new java.io.FileOutputStream(fileName);
+            File excelFile = new File(fileName);
+            java.io.FileOutputStream fileOut = new java.io.FileOutputStream(excelFile);
             workbook.write(fileOut);
             fileOut.close();
+            System.out.println("Excel concatenado creado exitosamente en: " + excelFile.getAbsolutePath());
 
             if (excelFiles != null) {
-                for (File excelFile : excelFiles) {
+                for (File file : excelFiles) {
                     if (!excelFile.delete()) {
                         System.out.println("No se pudo eliminar el archivo: " + excelFile.getName());
                     }
                 }
             }
 
-            // Limpiar la lista de transferencias después de crear el Excel concatenado
-            this.transferencias.clear();
-
+            // Ya no limpiamos todas las transferencias después de crear el Excel concatenado
+            // Solo registramos que se ha creado el archivo
+            System.out.println("Excel concatenado creado sin limpiar transferencias: " + fileName);
+            
             return fileName;
 
         } catch (Exception e) {
+            System.out.println("Error al crear el archivo Excel concatenado: " + e.getMessage());
+            e.printStackTrace();
             return "Error al crear el archivo Excel concatenado: " + e.getMessage();
         }
     }
@@ -204,9 +314,28 @@ public class TelegramFileService {
      * @return Mensaje indicando que se han limpiado las transferencias
      */
     public String clearTransferencias() {
-        int cantidad = this.transferencias.size();
-        this.transferencias.clear();
+        int cantidad = getTransferenciasCount();
+        this.transferenciasByChatId.clear();
         return "Se han eliminado " + cantidad + " transferencias de la memoria.";
+    }
+    
+    /**
+     * Limpia la lista de transferencias acumuladas para un chat específico
+     * @param chatId ID del chat para el cual limpiar las transferencias
+     * @return Mensaje indicando que se han limpiado las transferencias
+     */
+    public String clearTransferencias(Long chatId) {
+        if (chatId == null) {
+            return clearTransferencias();
+        }
+        
+        int cantidad = 0;
+        if (this.transferenciasByChatId.containsKey(chatId)) {
+            cantidad = this.transferenciasByChatId.get(chatId).size();
+            this.transferenciasByChatId.remove(chatId);
+        }
+        
+        return "Se han eliminado " + cantidad + " transferencias del chat " + chatId + ".";
     }
     
     /**
@@ -214,7 +343,29 @@ public class TelegramFileService {
      * @return Número de transferencias
      */
     public int getTransferenciasCount() {
-        return this.transferencias.size();
+        return getTransferenciasCount(null);
+    }
+    
+    /**
+     * Obtiene el número de transferencias acumuladas para un chat específico o todas si chatId es null
+     * @param chatId ID del chat para el cual contar las transferencias, o null para contar todas
+     * @return Número de transferencias
+     */
+    public int getTransferenciasCount(Long chatId) {
+        if (chatId != null) {
+            // Si se especifica un chatId, solo contamos las transferencias de ese chat
+            if (transferenciasByChatId.containsKey(chatId)) {
+                return transferenciasByChatId.get(chatId).size();
+            }
+            return 0;
+        } else {
+            // Si no se especifica chatId, contamos todas las transferencias
+            int totalTransferencias = 0;
+            for (List<TransferDTO> transferenciasChat : this.transferenciasByChatId.values()) {
+                totalTransferencias += transferenciasChat.size();
+            }
+            return totalTransferencias;
+        }
     }
 
     public java.io.File downloadFileByFileId(String fileId, String botToken) throws IOException {
