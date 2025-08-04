@@ -207,16 +207,15 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             driveButton.setCallbackData("save_to_drive");
             */
 
-            InlineKeyboardButton clearButton = new InlineKeyboardButton();
+          /*   InlineKeyboardButton clearButton = new InlineKeyboardButton();
             clearButton.setText("Limpiar transferencias");
-            clearButton.setCallbackData("clear_transfers");
-            
+            cle*/
             rowInline.add(downloadButton);
             rowInline.add(saveButton);
             rowsInline.add(rowInline);
             
             List<InlineKeyboardButton> rowInline2 = new ArrayList<>();
-            rowInline2.add(clearButton);
+          //  rowInline2.add(clearButton);
             rowsInline.add(rowInline2);
             markupInline.setKeyboard(rowsInline);
 
