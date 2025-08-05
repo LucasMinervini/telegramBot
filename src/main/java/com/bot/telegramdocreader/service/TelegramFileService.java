@@ -206,7 +206,7 @@ public class TelegramFileService {
             
             // Filtrar duplicados
             for (TransferDTO transferencia : todasLasTransferencias) {
-                boolean yaExiste = false;
+                boolean isExist = false;
                 for (TransferDTO unica : transferenciasUnicas) {
                     if (Objects.equals(unica.getDate(), transferencia.getDate()) &&
                         Objects.equals(unica.getTypeOFTransfer(), transferencia.getTypeOFTransfer()) &&
@@ -215,11 +215,11 @@ public class TelegramFileService {
                          Objects.equals(unica.getAmount(), "$" + transferencia.getAmount()) ||
                          Objects.equals("$" + unica.getAmount(), transferencia.getAmount())) &&
                         Objects.equals(unica.getBank(), transferencia.getBank())) {
-                        yaExiste = true;
+                        isExist = true;
                         break;
                     }
                 }
-                if (!yaExiste) {
+                if (!isExist) {
                     transferenciasUnicas.add(transferencia);
                 }
             }
@@ -243,32 +243,27 @@ public class TelegramFileService {
 
                 Cell cuitCell = row.createCell(2);
                 Cell bankCell = row.createCell(4);
-                if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("PREX")) {
-                    cuitCell.setCellValue(transferencia.getCbuDestiny() != null ? transferencia.getCbuDestiny() : "");
-                    bankCell.setCellValue(transferencia.getAccountDestiny() != null ? transferencia.getAccountDestiny() : "");
-                } else {
-                    // Si no hay CUIT pero hay titular, usar el nombre del titular
-                    if ((transferencia.getCuit() == null || transferencia.getCuit().isEmpty())) {
-                        if (transferencia.getTitular() != null && !transferencia.getTitular().isEmpty()) {
-                            cuitCell.setCellValue(transferencia.getTitular());
-                        } else if (transferencia.getTitularCuentaDestino() != null && !transferencia.getTitularCuentaDestino().isEmpty()) {
-                            cuitCell.setCellValue(transferencia.getTitularCuentaDestino());
-                        } else {
-                            cuitCell.setCellValue(transferencia.getCuit());
-                        }
-                    } else {
-                        cuitCell.setCellValue(transferencia.getCuit());
-                    }
-                    bankCell.setCellValue(transferencia.getBank());
-                }
-                cuitCell.setCellStyle(dataStyle);
+                String cuitOrName = (transferencia.isBBVA() || transferencia.isCuentaDni() || transferencia.isUala())? transferencia.getTitularCuentaDestino(): transferencia.getCuit();
+        if (transferencia.isCuentaDni()){
+            cuitOrName = transferencia.getCuentaOrigen();
+        }if(transferencia.isUala()){
+            cuitOrName = transferencia.getAccountDestiny();
+       }if (transferencia.isBBVA()) {
+        cuitOrName = transferencia.getCuentaOrigen();
+       }
+        
+        if (cuitOrName == null) {
+             cuitOrName = "";
+            } 
+        cuitCell.setCellValue(cuitOrName);
+        cuitCell.setCellStyle(dataStyle);
 
                 Cell amountCell = row.createCell(3);
                 amountCell.setCellValue("$" + transferencia.getAmount());
                 amountCell.setCellStyle(dataStyle);
 
                 bankCell.setCellStyle(dataStyle);
-
+                bankCell.setCellValue(transferencia.getBank());
                /* Cell statusCell = row.createCell(6);
                 statusCell.setCellValue(transferencia.getStatusOp() != null ? transferencia.getStatusOp() : "");
                 statusCell.setCellStyle(dataStyle);

@@ -30,6 +30,8 @@ public class ExportExcel {
     }
 
     public static String exportTransferToExcel(TransferDTO transfer) throws IOException {
+
+         
         if (transfer == null) {
             throw new IllegalArgumentException("La transferencia no puede ser nula");
         }
@@ -82,7 +84,26 @@ public class ExportExcel {
         typeCell.setCellStyle(dataStyle);
 
         Cell cuitCell = dataRow.createCell(2);
-        cuitCell.setCellValue(transfer.getCuit());
+        // Lógica para bancos sin CUIT: mostrar titular en lugar de CUIT vacío
+        //String cuitValue = transfer.getCuit();
+        String cuitOrName = (transfer.isBBVA() || transfer.isCuentaDni() || transfer.isUala())
+    ? transfer.getTitularCuentaDestino()
+    : transfer.getCuit();
+        
+
+       
+        if (transfer.isCuentaDni()){
+            cuitOrName = transfer.getCuentaOrigen();
+        }if(transfer.isUala()){
+            cuitOrName = transfer.getAccountDestiny();
+       }if (transfer.isBBVA()) {
+        cuitOrName = transfer.getCuentaOrigen();
+       }
+        
+        if (cuitOrName == null) {
+             cuitOrName = "";
+            } 
+        cuitCell.setCellValue(cuitOrName);
         cuitCell.setCellStyle(dataStyle);
 
         Cell amountCell = dataRow.createCell(3);

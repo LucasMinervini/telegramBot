@@ -32,7 +32,7 @@ import java.util.Objects;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayList;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -132,6 +132,7 @@ public class DocumentProcessingService {
                 if (isCuentaDni) {
                     TransferDTO transferenciaDNI = CuentaDni.parseCuentaDniTransfer(textoExtraido, doc);
                     if (transferenciaDNI != null) {
+                        transferenciaDNI.setCuentaDni(true);
                         lastTransferByChatId.put(chatId, transferenciaDNI);
                         // Ya no necesitamos mantener nuestra propia lista, TelegramFileService lo hará por nosotros
                         // cuando llamemos a createExcelFile con el chatId
@@ -528,7 +529,7 @@ public class DocumentProcessingService {
         return lastTransferByChatId.values().iterator().next();
     }
 
-    private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
+    public TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Booleanos para detectar el tipo de banco
         boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
         boolean isBNA = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
@@ -542,14 +543,7 @@ public class DocumentProcessingService {
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS) || isNewMacroFormat;
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS) || detectAllBanks(textoExtraido, GALICIA_FALLBACK_PATTERNS);
         
-        // Debug para Galicia
-        System.out.println("=== DEBUG GALICIA DETECTION ===");
-        System.out.println("isGalicia: " + isGalicia);
-        System.out.println("Filename: " + doc.getFileName());
-        System.out.println("Text contains 'banco de galicia': " + textoExtraido.toLowerCase().contains("banco de galicia"));
-        System.out.println("Text contains 'galicia': " + textoExtraido.toLowerCase().contains("galicia"));
-        System.out.println("Text contains 'transferencia enviada': " + textoExtraido.toLowerCase().contains("transferencia enviada"));
-        System.out.println("================================");
+       
         
         boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
         

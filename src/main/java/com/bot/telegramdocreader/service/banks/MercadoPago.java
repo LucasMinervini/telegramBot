@@ -38,12 +38,39 @@ public class MercadoPago {
         String titular = "";
         boolean foundPara = false;
         int paraIndex = -1;
+        
+        // Variables para detectar secuencia fragmentada de MercadoPago
+        boolean foundMercado = false;
+        boolean foundPago = false;
+        int mercadoIndex = -1;
+        int pagoIndex = -1;
 
         
         
         for (int i = 0; i < lines.length; i++) {
             String lower = lines[i].toLowerCase().trim();
             String original = lines[i].trim();
+            
+            // Detectar secuencia fragmentada de MercadoPago cuando el OCR separa el texto en líneas:
+            // Ejemplo: "E? mercado" -> "pago" -> "S Para"
+            // Esta lógica maneja casos donde el OCR fragmenta "MercadoPago Para" en múltiples líneas
+            if (!foundMercado && (lower.contains("mercado") || lower.matches(".*e\\?\\s*mercado.*") || lower.matches(".*mercado.*"))) {
+                foundMercado = true;
+                mercadoIndex = i;
+            }
+            
+            if (foundMercado && !foundPago && (lower.trim().equals("pago") || lower.contains("pago")) && (i - mercadoIndex) <= 3) {
+                foundPago = true;
+                pagoIndex = i;
+            }
+            
+            if (foundMercado && foundPago && !foundPara && 
+                (lower.matches(".*s\\s*para.*") || lower.trim().equals("para") || lower.contains("para")) && 
+                (i - pagoIndex) <= 3) {
+                foundPara = true;
+                paraIndex = i;
+                continue;
+            }
             // Fecha (buscar línea con día de la semana y fecha larga)
             if (fecha.isEmpty() && lower.matches("^(lunes|martes|miércoles|miercoles|jueves|viernes|sábado|sabado|domingo)[,\\s].*\\d{4}.*")) {
                 String fechaTexto = original.replaceAll("\\s+a\\s+las.*", "").replaceAll(",", "").trim();
@@ -142,11 +169,12 @@ public class MercadoPago {
             }
             
             // Detectar "Para" con cualquier símbolo delante (>, +, », etc.) y variaciones OCR como "pera"
-            if (lower.matches("^[^a-zA-Z0-9]*p[ae]ra(\\s|:|$)") || 
+            // Solo si no se ha detectado ya con la secuencia fragmentada
+            if (!foundPara && (lower.matches("^[^a-zA-Z0-9]*p[ae]ra(\\s|:|$)") || 
                 lower.matches(".*[>+»\\-_=*#@!&%\\$\\^~`\\[\\]{}\\(\\)\\|\\\\/<.,;:\"'?]\\s*p[ae]ra(\\s|:|$)") ||
                 lower.trim().matches("^[>+»\\-_=*#@!&%\\$\\^~`\\[\\]{}\\(\\)\\|\\\\/<.,;:\"'?]+\\s*p[ae]ra$") ||
                 lower.contains("> pera") || lower.contains("+ pera") || lower.contains("» pera") ||
-                lower.contains(">pera") || lower.contains("+pera") || lower.contains("»pera")) {
+                lower.contains(">pera") || lower.contains("+pera") || lower.contains("»pera") || lower.contains("s para"))) {
                 foundPara = true;
                 paraIndex = i;
                 continue;
