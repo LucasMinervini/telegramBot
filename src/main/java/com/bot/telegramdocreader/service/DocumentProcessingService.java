@@ -28,12 +28,14 @@ import net.sourceforge.tess4j.ITesseract;
 import net.sourceforge.tess4j.Tesseract;
 
 import java.awt.image.BufferedImage;
+import java.util.Objects;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
 
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -75,8 +77,7 @@ public class DocumentProcessingService {
     
     // Declarar el bot como un campo privado
     private TelegramDocBot bot;
-    private TransferDTO lastTransfer; // Almacenar la última transferencia procesada
-    private List<TransferDTO> transferencias = new ArrayList<>(); // Lista para acumular transferencias
+    private Map<Long, TransferDTO> lastTransferByChatId = new HashMap<>(); // Almacenar la última transferencia procesada por chatId
     private TelegramFileService telegramFileService;
     
 
@@ -119,8 +120,10 @@ public class DocumentProcessingService {
                 if (isSantander) {
                     TransferDTO transferenciaSantander = Santander.parseSantanderTransfer(textoExtraido, doc);
                     if (transferenciaSantander != null) {
-                        lastTransfer = transferenciaSantander;
-                        telegramFileService.createExcelFile(transferenciaSantander);
+                        lastTransferByChatId.put(chatId, transferenciaSantander);
+                        // Ya no necesitamos mantener nuestra propia lista, TelegramFileService lo hará por nosotros
+                        // cuando llamemos a createExcelFile con el chatId
+                        telegramFileService.createExcelFile(transferenciaSantander, chatId);
                         return Santander.formatSantander(transferenciaSantander);
                     }
                 }
@@ -129,8 +132,11 @@ public class DocumentProcessingService {
                 if (isCuentaDni) {
                     TransferDTO transferenciaDNI = CuentaDni.parseCuentaDniTransfer(textoExtraido, doc);
                     if (transferenciaDNI != null) {
-                        lastTransfer = transferenciaDNI;
-                        telegramFileService.createExcelFile(transferenciaDNI);
+                        transferenciaDNI.setCuentaDni(true);
+                        lastTransferByChatId.put(chatId, transferenciaDNI);
+                        // Ya no necesitamos mantener nuestra propia lista, TelegramFileService lo hará por nosotros
+                        // cuando llamemos a createExcelFile con el chatId
+                        telegramFileService.createExcelFile(transferenciaDNI, chatId);
                         return CuentaDni.formatCuentaDni(transferenciaDNI);
                     }
                 }
@@ -183,8 +189,10 @@ public class DocumentProcessingService {
                 if (isMercadoPago) {
                     TransferDTO transferenciaMP = MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
                     if (transferenciaMP != null) {
-                        lastTransfer = transferenciaMP;
-                        telegramFileService.createExcelFile(transferenciaMP);
+                        lastTransferByChatId.put(chatId, transferenciaMP);
+                        // Ya no necesitamos mantener nuestra propia lista, TelegramFileService lo hará por nosotros
+                        // cuando llamemos a createExcelFile con el chatId
+                        telegramFileService.createExcelFile(transferenciaMP, chatId);
                         try {
                             String excelResult = ExportExcel.exportTransferToExcel(transferenciaMP);
                             if (excelResult.startsWith("Error")) {
@@ -201,8 +209,10 @@ public class DocumentProcessingService {
                 // --- FIN LOG MERCADO PAGO ---
                 TransferDTO transferencia = mapperTransf(textoExtraido, false, doc);
                 if (isUala && transferencia != null) {
-                    lastTransfer = transferencia;
-                    telegramFileService.createExcelFile(transferencia);
+                    lastTransferByChatId.put(chatId, transferencia);
+                    // Ya no necesitamos mantener nuestra propia lista, TelegramFileService lo hará por nosotros
+                    // cuando llamemos a createExcelFile con el chatId
+                    telegramFileService.createExcelFile(transferencia, chatId);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                         if (excelResult.startsWith("Error")) {
@@ -218,8 +228,10 @@ public class DocumentProcessingService {
                 }
                
                 if (transferencia != null) {
-                    lastTransfer = transferencia;
-                    telegramFileService.createExcelFile(transferencia);
+                    lastTransferByChatId.put(chatId, transferencia);
+                    // Ya no necesitamos mantener nuestra propia lista, TelegramFileService lo hará por nosotros
+                    // cuando llamemos a createExcelFile con el chatId
+                    telegramFileService.createExcelFile(transferencia, chatId);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                         if (excelResult.startsWith("Error")) {
@@ -238,7 +250,7 @@ public class DocumentProcessingService {
                             return BancoProvincia.formatBancoProvincia(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BANCOR")) {
                             return Bancor.formatBancor(transferencia);
-                        } else if (com.bot.telegramdocreader.service.banks.CuentaDni.class.getSimpleName().equals(transferencia.getClass().getSimpleName()) || (transferencia.getTypeOFTransfer() != null && transferencia.getTypeOFTransfer().equalsIgnoreCase("Transferencia") && transferencia.getCuentaOrigen() != null && !transferencia.getCuentaOrigen().isEmpty() && transferencia.getBank() != null && !transferencia.getBank().isEmpty() && transferencia.getDate() != null && !transferencia.getDate().isEmpty())) {
+                        } else if (Objects.equals(com.bot.telegramdocreader.service.banks.CuentaDni.class.getSimpleName(), transferencia.getClass().getSimpleName()) || (transferencia.getTypeOFTransfer() != null && transferencia.getTypeOFTransfer().equalsIgnoreCase("Transferencia") && transferencia.getCuentaOrigen() != null && !transferencia.getCuentaOrigen().isEmpty() && transferencia.getBank() != null && !transferencia.getBank().isEmpty() && transferencia.getDate() != null && !transferencia.getDate().isEmpty())) {
                             return com.bot.telegramdocreader.service.banks.CuentaDni.formatCuentaDni(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BBVA")) {
                             return BBVA.formatBBVA(transferencia);
@@ -309,8 +321,8 @@ public class DocumentProcessingService {
                 if (isMercadoPago) {
                     TransferDTO transferenciaMP = MercadoPago.parseMercadoPagoTransfer(textoExtraido, doc);
                     if (transferenciaMP != null) {
-                        lastTransfer = transferenciaMP;
-                        telegramFileService.createExcelFile(transferenciaMP);
+                        lastTransferByChatId.put(chatId, transferenciaMP);
+                        telegramFileService.createExcelFile(transferenciaMP, chatId);
                         try {
                             String excelResult = ExportExcel.exportTransferToExcel(transferenciaMP);
                             if (excelResult.startsWith("Error")) {
@@ -328,8 +340,8 @@ public class DocumentProcessingService {
                 System.out.println(textoExtraido);
                 
                 if (transferencia != null) {
-                    lastTransfer = transferencia;
-                    telegramFileService.createExcelFile(transferencia);
+                    lastTransferByChatId.put(chatId, transferencia);
+                    telegramFileService.createExcelFile(transferencia, chatId);
                     try {
                         String excelResult = ExportExcel.exportTransferToExcel(transferencia);
                         if (excelResult.startsWith("Error")) {
@@ -350,7 +362,7 @@ public class DocumentProcessingService {
                             return Bancor.formatBancor(transferencia);
                         } else if(transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("BBVA")) {
                             return BBVA.formatBBVA(transferencia);
-                        } else if (com.bot.telegramdocreader.service.banks.CuentaDni.class.getSimpleName().equals(transferencia.getClass().getSimpleName()) || (transferencia.getTypeOFTransfer() != null && transferencia.getTypeOFTransfer().equalsIgnoreCase("Transferencia") && transferencia.getCuentaOrigen() != null && !transferencia.getCuentaOrigen().isEmpty() && transferencia.getBank() != null && !transferencia.getBank().isEmpty() && transferencia.getDate() != null && !transferencia.getDate().isEmpty())) {
+                        } else if (Objects.equals(com.bot.telegramdocreader.service.banks.CuentaDni.class.getSimpleName(), transferencia.getClass().getSimpleName()) || (transferencia.getTypeOFTransfer() != null && transferencia.getTypeOFTransfer().equalsIgnoreCase("Transferencia") && transferencia.getCuentaOrigen() != null && !transferencia.getCuentaOrigen().isEmpty() && transferencia.getBank() != null && !transferencia.getBank().isEmpty() && transferencia.getDate() != null && !transferencia.getDate().isEmpty())) {
                             return com.bot.telegramdocreader.service.banks.CuentaDni.formatCuentaDni(transferencia);
                         } else if (transferencia.getBank() != null && transferencia.getBank().equalsIgnoreCase("NARANJAX")) {
                             return NaranjaX.formatNaranjaX(transferencia);
@@ -422,7 +434,7 @@ public class DocumentProcessingService {
         
         // Verificar por extensión de archivo y tipo MIME
         boolean isPdfByExtension = fileName.endsWith(".pdf");
-        boolean isPdfByMimeType = mimeType.equals("application/pdf");
+        boolean isPdfByMimeType = Objects.equals(mimeType, "application/pdf");
         
         return isPdfByExtension || isPdfByMimeType;
     }
@@ -503,11 +515,21 @@ public class DocumentProcessingService {
     }
 
 
+    public TransferDTO getLastTransfer(Long chatId) {
+        return this.lastTransferByChatId.get(chatId);
+    }
+    
+    // Método para obtener la última transferencia sin especificar chatId (compatibilidad)
     public TransferDTO getLastTransfer() {
-        return this.lastTransfer;
+        // Si no hay transferencias, devolver null
+        if (lastTransferByChatId.isEmpty()) {
+            return null;
+        }
+        // Devolver la última transferencia agregada (cualquier chatId)
+        return lastTransferByChatId.values().iterator().next();
     }
 
-    private TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
+    public TransferDTO mapperTransf(String textoExtraido, boolean isPdfFormat, Document doc) {
         // Booleanos para detectar el tipo de banco
         boolean isBBva = detectBank(textoExtraido, doc.getFileName(), BBVA_PATTERNS) || detectBBVA(textoExtraido, doc.getFileName());
         boolean isBNA = detectBank(textoExtraido, doc.getFileName(), BNA_PATTERNS);
@@ -521,14 +543,7 @@ public class DocumentProcessingService {
         boolean isMacro = detectBank(textoExtraido, doc.getFileName(), MACRO_PATTERNS) || isNewMacroFormat;
         boolean isGalicia = detectBank(textoExtraido, doc.getFileName(), GALICIA_PATTERNS) || detectAllBanks(textoExtraido, GALICIA_FALLBACK_PATTERNS);
         
-        // Debug para Galicia
-        System.out.println("=== DEBUG GALICIA DETECTION ===");
-        System.out.println("isGalicia: " + isGalicia);
-        System.out.println("Filename: " + doc.getFileName());
-        System.out.println("Text contains 'banco de galicia': " + textoExtraido.toLowerCase().contains("banco de galicia"));
-        System.out.println("Text contains 'galicia': " + textoExtraido.toLowerCase().contains("galicia"));
-        System.out.println("Text contains 'transferencia enviada': " + textoExtraido.toLowerCase().contains("transferencia enviada"));
-        System.out.println("================================");
+       
         
         boolean isSantander = detectBank(textoExtraido, doc.getFileName(), SANTANDER_PATTERNS);
         
@@ -1052,7 +1067,7 @@ public class DocumentProcessingService {
             String año = partes[2];
             
             for (int i = 0; i < meses.length; i++) {
-                if (partes[1].equals(meses[i])) {
+                if (Objects.equals(partes[1], meses[i])) {
                     mes = String.format("%02d", i + 1);
                     break;
                 }
@@ -1065,9 +1080,16 @@ public class DocumentProcessingService {
         return fechaTexto;
     }
 
-// Método para obtener todas las transferencias acumuladas
+// Método para obtener todas las transferencias acumuladas para un chatId específico
+public List<TransferDTO> getTransferencias(Long chatId) {
+    // Delegamos a TelegramFileService para obtener las transferencias
+    return telegramFileService.getTransferenciasByChatId(chatId);
+}
+
+// Método para obtener todas las transferencias acumuladas (compatibilidad)
 public List<TransferDTO> getTransferencias() {
-    return transferencias;
+    // Delegamos a TelegramFileService para obtener todas las transferencias
+    return telegramFileService.getAllTransferencias();
 }
 
 public void handleDocumentMessage(Message message) {

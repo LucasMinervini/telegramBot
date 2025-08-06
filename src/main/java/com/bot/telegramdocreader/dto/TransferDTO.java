@@ -19,7 +19,11 @@ public class TransferDTO {
     private String bank;
     private String typeOFTransfer;
     private String accountDestiny;    
-    private String cbuDestiny;       
+    private String cbuDestiny;    
+    
+    private boolean isBBVA;
+    private boolean isUALA;
+    private boolean isCuentaDni;
 
 
     
@@ -40,4 +44,10 @@ public class TransferDTO {
                 "Tipo de Operación: " + typeOFTransfer + "\n" +
                "Banco: " + bank;
     }
+
+    public boolean isBBVA(){return isBBVA;  }public void setBBVA(boolean isBBVA){this.isBBVA = isBBVA;}
+    public boolean isCuentaDni() { return isCuentaDni; }
+    public void setCuentaDni(boolean isCuentaDni) { this.isCuentaDni = isCuentaDni; }
+    public boolean isUala() { return isUALA; }
+    public void setUala(boolean isUala) { this.isUALA = isUala; }
 }

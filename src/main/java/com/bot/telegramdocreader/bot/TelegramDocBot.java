@@ -21,6 +21,7 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 
 @Component
@@ -79,7 +80,7 @@ public class TelegramDocBot extends TelegramLongPollingBot {
 
             if (message.hasText()) {
                 String messageText = message.getText();
-                if (messageText.equals("/start")) {
+                if (Objects.equals(messageText, "/start")) {
                     ClientsDTO client = mapClient.computeIfAbsent(chatId, id ->
                         ClientsDTO.builder()
                             .chatId(id)
@@ -87,14 +88,23 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                             .build()
                     );
                     sendTextMessage(chatId, "¡Hola " + client.getName() + "! 👋 Ya estás listo para enviar comprobantes. Mandame una imagen o PDF para procesar.");
-                } else if (messageText.equals("/limpiar")) {
-                    // Limpiar la lista de transferencias
-                    String resultado = telegramFileService.clearTransferencias();
+                } else if (Objects.equals(messageText, "/limpiar")) {
+                    // Limpiar la lista de transferencias solo para este chat
+                    Long currentChatId = chatId;
+                    String resultado = telegramFileService.clearTransferencias(currentChatId);
                     sendTextMessage(chatId, resultado);
-                } else if (messageText.equals("/status")) {
-                    // Mostrar el número de transferencias acumuladas
-                    int count = telegramFileService.getTransferenciasCount();
-                    sendTextMessage(chatId, "Actualmente hay " + count + " transferencias en memoria.");
+                } else if (Objects.equals(messageText, "/status")) {
+                    // Mostrar el número de transferencias acumuladas para este chat
+                    Long currentChatId = chatId;
+                    int countForChat = telegramFileService.getTransferenciasCount(currentChatId);
+                    int totalCount = telegramFileService.getTransferenciasCount();
+                    
+                    String mensaje = "En este chat hay " + countForChat + " transferencias.";
+                    if (totalCount > countForChat) {
+                        mensaje += "\nEn total hay " + totalCount + " transferencias en todos los chats.";
+                    }
+                    
+                    sendTextMessage(chatId, mensaje);
                 }
             } else if (message.hasDocument()) {
                 handleDocumentMessage(update);
@@ -138,10 +148,10 @@ public class TelegramDocBot extends TelegramLongPollingBot {
             saveButton.setText("Guardar Excel");
             saveButton.setCallbackData("save_excel");
 
-          /*  InlineKeyboardButton clearButton = new InlineKeyboardButton();
+           /*  InlineKeyboardButton clearButton = new InlineKeyboardButton();
             clearButton.setText("Limpiar transferencias");
             clearButton.setCallbackData("clear_transfers");
-            */ 
+            */
             rowInline.add(downloadButton);
             rowInline.add(saveButton);
             
@@ -195,18 +205,18 @@ public class TelegramDocBot extends TelegramLongPollingBot {
            /*  InlineKeyboardButton driveButton = new InlineKeyboardButton();
             driveButton.setText("Guardar en Drive");
             driveButton.setCallbackData("save_to_drive");
+            */
 
+          /*   InlineKeyboardButton clearButton = new InlineKeyboardButton();
+            clearButton.setText("Limpiar transferencias");
+            cle*/
             rowInline.add(downloadButton);
             rowInline.add(saveButton);
-            rowInline.add(driveButton);
             rowsInline.add(rowInline);
-            markupInline.setKeyboard(rowsInline);
-             */
-
             
-            rowInline.add(downloadButton);
-            rowInline.add(saveButton);
-            rowsInline.add(rowInline);
+            List<InlineKeyboardButton> rowInline2 = new ArrayList<>();
+          //  rowInline2.add(clearButton);
+            rowsInline.add(rowInline2);
             markupInline.setKeyboard(rowsInline);
 
 
@@ -239,37 +249,62 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                 return;
             }
 
-            if ("download_concat_excel".equals(callbackData)) {
-                String excelFilePath = telegramFileService.createConcatenatedExcelFile();
-                if (!excelFilePath.startsWith("Error")) {
-                    // Crear un objeto File con la ruta del Excel concatenado
-                    File excelFile = new File(excelFilePath);
-                    if (excelFile.exists()) {
-                        // Enviar el archivo Excel concatenado como documento usando InputFile
-                        SendDocument sendDocument = new SendDocument();
-                        sendDocument.setChatId(chatId);
-                        sendDocument.setDocument(new InputFile(excelFile));
-                        sendDocument.setCaption("Archivo Excel concatenado generado");
-                        execute(sendDocument);
-                        
-                        // Eliminar el archivo Excel después de enviarlo
-                        if (excelFile.delete()) {
-                            System.out.println("Archivo Excel concatenado eliminado después de la descarga: " + excelFilePath);
-                        } else {
-                            System.out.println("No se pudo eliminar el archivo Excel concatenado: " + excelFilePath);
-                        }
-                    } else {
-                        execute(new SendMessage(chatId, "Error: No se pudo encontrar el archivo Excel concatenado."));
+            if (Objects.equals("download_concat_excel", callbackData)) {
+                try {
+                    // Verificar si hay transferencias disponibles para este chat específico
+                    Long currentChatId = Long.parseLong(chatId);
+                    boolean hasTransferenciasForChat = telegramFileService.hasTransferenciasForChat(currentChatId);
+                    
+                    if (!hasTransferenciasForChat) {
+                        execute(new SendMessage(chatId, "Error: No hay transferencias para concatenar. Por favor, procese al menos un documento primero."));
+                        System.out.println("Error: No hay transferencias para este chat");
+                        return;
                     }
-                } 
-            } else if ("save_excel".equals(callbackData)) {
+                    
+                    String excelFilePath = telegramFileService.createConcatenatedExcelFile(currentChatId);
+                    if (excelFilePath.startsWith("Error")) {
+                        // Mostrar el mensaje de error al usuario
+                        execute(new SendMessage(chatId, excelFilePath));
+                        System.out.println("Error al crear Excel concatenado: " + excelFilePath);
+                    } else {
+                        // Crear un objeto File con la ruta del Excel concatenado
+                        File excelFile = new File(excelFilePath);
+                        if (excelFile.exists()) {
+                            // Enviar el archivo Excel concatenado como documento usando InputFile
+                            SendDocument sendDocument = new SendDocument();
+                            sendDocument.setChatId(chatId);
+                            sendDocument.setDocument(new InputFile(excelFile));
+                            sendDocument.setCaption("Archivo Excel concatenado generado");
+                            execute(sendDocument);
+                            
+                            // Eliminar el archivo Excel después de enviarlo
+                            if (excelFile.delete()) {
+                                System.out.println("Archivo Excel concatenado eliminado después de la descarga: " + excelFilePath);
+                            } else {
+                                System.out.println("No se pudo eliminar el archivo Excel concatenado: " + excelFilePath);
+                            }
+                            
+                            // Ya no limpiamos las transferencias después de enviar el Excel concatenado
+                            // para permitir que el usuario pueda descargar múltiples veces
+                            // String clearResult = telegramFileService.clearTransferencias(currentChatId);
+                            // System.out.println(clearResult);
+                        } else {
+                            execute(new SendMessage(chatId, "Error: No se pudo encontrar el archivo Excel concatenado."));
+                        }
+                    }
+                } catch (Exception e) {
+                    execute(new SendMessage(chatId, "Error al generar Excel concatenado: " + e.getMessage()));
+                    System.out.println("Excepción al generar Excel concatenado: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            } else if (Objects.equals("save_excel", callbackData)) {
                 String excelResult = telegramFileService.createExcelFile(lastTransfer);
                 if (!excelResult.startsWith("Error")) {
                     execute(new SendMessage(chatId, "El archivo Excel se ha guardado exitosamente en la carpeta."));
                 } else {
                     execute(new SendMessage(chatId, excelResult));
                 }
-            } else if ("save_to_drive".equals(callbackData)) {
+            } else if (Objects.equals("save_to_drive", callbackData)) {
                 String excelFilePath = telegramFileService.createConcatenatedExcelFile();
                 if (!excelFilePath.startsWith("Error")) {
                     String driveResult = telegramFileService.uploadToDrive(excelFilePath);
@@ -277,9 +312,10 @@ public class TelegramDocBot extends TelegramLongPollingBot {
                 } else {
                     execute(new SendMessage(chatId, excelFilePath));
                 }
-            } else if ("clear_transfers".equals(callbackData)) {
-                // Limpiar la lista de transferencias
-                String resultado = telegramFileService.clearTransferencias();
+            } else if (Objects.equals("clear_transfers", callbackData)) {
+                // Limpiar la lista de transferencias solo para este chat
+                Long currentChatId = Long.parseLong(chatId);
+                String resultado = telegramFileService.clearTransferencias(currentChatId);
                 execute(new SendMessage(chatId, resultado));
             }
         } catch (Exception e) {
